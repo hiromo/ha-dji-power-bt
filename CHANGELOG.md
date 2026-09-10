@@ -9,6 +9,8 @@ notable user impact rather than every internal code change.
 
 ## Unreleased
 
+## 0.7.31 - 2026-09-10
+
 - Added `dji_power_bt.set_tariff_schedule` for complete Power 2000 tariff-table
   replacement using an all-day preset or a detailed weekday/time period list.
 - Removed the standalone `Tariff schedule profile` entity. Its read-only
