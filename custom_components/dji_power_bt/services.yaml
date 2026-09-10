@@ -1,0 +1,115 @@
+start_protocol_capture:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device: {}
+    duration_seconds:
+      required: false
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 300
+          step: 1
+          mode: box
+          unit_of_measurement: s
+    max_frames:
+      required: false
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 1000
+          step: 1
+          mode: box
+
+set_scheduled_energy_settings:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: dji_power_bt
+    energy_optimization_mode:
+      required: false
+      selector:
+        select:
+          translation_key: tariff_preset
+          options:
+            - disabled
+            - scheduled
+    peak_discharging:
+      required: false
+      selector:
+        boolean: {}
+    off_peak_charging:
+      required: false
+      selector:
+        boolean: {}
+    off_peak_charging_power:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 10000
+          step: 1
+          mode: box
+          unit_of_measurement: W
+
+set_tariff_schedule:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: dji_power_bt
+    preset:
+      required: false
+      selector:
+        select:
+          options:
+            - all_day_peak
+            - all_day_off_peak
+    periods:
+      required: false
+      selector:
+        object:
+          label_field: tariff
+          description_field: start_time
+          multiple: true
+          fields:
+            tariff:
+              label: Tariff
+              required: true
+              selector:
+                select:
+                  translation_key: tariff_kind
+                  options:
+                    - peak
+                    - off_peak
+            weekdays:
+              label: Weekdays
+              required: true
+              selector:
+                select:
+                  translation_key: tariff_weekday
+                  multiple: true
+                  options:
+                    - mon
+                    - tue
+                    - wed
+                    - thu
+                    - fri
+                    - sat
+                    - sun
+            start_time:
+              label: Start time
+              required: true
+              selector:
+                time: {}
+            end_time:
+              label: End time
+              required: true
+              selector:
+                time: {}

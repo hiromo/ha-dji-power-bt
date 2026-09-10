@@ -1,0 +1,224 @@
+{
+  "title": "DJI Power Bluetooth",
+  "config": {
+    "step": {
+      "select_device": {
+        "title": "Select a DJI Power device",
+        "description": "Select a currently advertising DJI Power device. The BLE address and model code are read automatically from Home Assistant Bluetooth discovery.",
+        "data": {
+          "device": "DJI Power device"
+        }
+      },
+      "auth_method": {
+        "title": "Obtain the local BLE pair key",
+        "description": "Choose how to obtain the per-device 32-character HEX pair key. Account and member-token methods use DJI cloud only during setup; normal operation remains local BLE.",
+        "menu_options": {
+          "account": "DJI account (experimental)",
+          "token": "Existing DJI member token (advanced)",
+          "manual": "Enter a known pair key manually"
+        }
+      },
+      "manual": {
+        "title": "Enter the local BLE pair key",
+        "description": "Enter the 32-character hexadecimal pair key for the selected DJI Power device.",
+        "data": {
+          "change_auth_method": "Return to authentication method selection",
+          "local_auth_key": "Local pair key (32-character HEX)",
+          "device_name": "Home Assistant device name"
+        }
+      },
+      "token": {
+        "title": "Use a DJI member token",
+        "description": "The token is used once to read pair_info.pair_key from the devices registered to the DJI account. It is not saved in the config entry.",
+        "data": {
+          "change_auth_method": "Return to authentication method selection",
+          "member_token": "DJI member token",
+          "device_name": "Home Assistant device name"
+        }
+      },
+      "account": {
+        "title": "Sign in to DJI (experimental)",
+        "description": "DJI Home uses private account APIs that may change. The email address, password, CAPTCHA data, and resulting member token are kept only during setup and are not saved.",
+        "data": {
+          "change_auth_method": "Return to authentication method selection",
+          "email": "DJI account email",
+          "password": "DJI account password",
+          "device_name": "Home Assistant device name"
+        }
+      },
+      "captcha": {
+        "title": "DJI image CAPTCHA",
+        "description": "Enter the characters shown below.\n\n![DJI CAPTCHA]({image})",
+        "data": {
+          "change_auth_method": "Return to authentication method selection",
+          "captcha_code": "CAPTCHA text"
+        }
+      },
+      "two_factor": {
+        "title": "DJI verification code",
+        "description": "Enter the email or two-step verification code requested by DJI. This private flow is experimental.",
+        "data": {
+          "change_auth_method": "Return to authentication method selection",
+          "code": "Verification code"
+        }
+      },
+      "cloud_device": {
+        "title": "Select the registered DJI device",
+        "description": "Select the cloud device that corresponds to the BLE device selected earlier.",
+        "data": {
+          "change_auth_method": "Return to authentication method selection",
+          "device": "Registered DJI device"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate DJI Power Bluetooth",
+        "description": "The saved local pair key appears to be invalid. Enter a new 32-character HEX key.",
+        "data": {
+          "local_auth_key": "Local pair key (32-character HEX)"
+        }
+      }
+    },
+    "error": {
+      "invalid_key": "The local pair key must be 32 hexadecimal characters.",
+      "cloud_lookup_failed": "Could not retrieve the DJI device list. The private DJI API may have changed or the token may be invalid.",
+      "no_cloud_devices": "No registered DJI device with a local BLE pair key was found.",
+      "invalid_captcha": "The image CAPTCHA was rejected.",
+      "login_failed": "DJI account sign-in failed.",
+      "invalid_code": "The verification code was rejected.",
+      "required": "This field is required.",
+      "rate_limited": "DJI temporarily rate-limited verification attempts. Try again later."
+    },
+    "abort": {
+      "already_configured": "This DJI Power device is already configured.",
+      "no_devices_found": "No unconfigured, connectable DJI Power advertisement was found. Disconnect DJI Home from the device and try again.",
+      "device_disappeared": "The selected DJI Power device is no longer advertising.",
+      "not_supported": "The Bluetooth advertisement is not a supported DJI Power device.",
+      "cloud_lookup_failed": "The DJI cloud lookup failed.",
+      "no_cloud_devices": "No DJI cloud device with a pair key was found.",
+      "invalid_pair_key_from_cloud": "DJI cloud returned an invalid pair key.",
+      "reauth_successful": "The DJI Power pair key was updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DJI Power Bluetooth options",
+        "description": "Control how often the latest BLE telemetry is published to Home Assistant. BLE notifications are still received and parsed at their native cadence.",
+        "data": {
+          "telemetry_update_interval": "Telemetry update interval (seconds)"
+        }
+      }
+    }
+  },
+  "selector": {
+    "tariff_preset": {
+      "options": {
+        "all_day_peak": "All-day peak",
+        "all_day_off_peak": "All-day off-peak"
+      }
+    },
+    "tariff_kind": {
+      "options": {
+        "peak": "Peak",
+        "off_peak": "Off-peak"
+      }
+    },
+    "tariff_weekday": {
+      "options": {
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+        "sat": "Saturday",
+        "sun": "Sunday"
+      }
+    }
+  },
+  "services": {
+    "start_protocol_capture": {
+      "name": "Start protocol capture",
+      "description": "Capture a bounded set of non-authentication DJI Power protocol payloads in memory. Download integration diagnostics after reproducing the condition.",
+      "fields": {
+        "device_id": {
+          "name": "DJI Power device",
+          "description": "The physical DJI Power device to capture."
+        },
+        "duration_seconds": {
+          "name": "Duration",
+          "description": "Maximum capture duration in seconds."
+        },
+        "max_frames": {
+          "name": "Maximum frames",
+          "description": "Stop after this many safe protocol frames."
+        }
+      }
+    },
+    "set_scheduled_energy_settings": {
+      "name": "Set scheduled energy settings",
+      "description": "Update one or more known 0x1018 scheduled-energy fields in a single BLE read-modify-write transaction. Unspecified fields are preserved.",
+      "fields": {
+        "device_id": {
+          "name": "DJI Power device",
+          "description": "The physical DJI Power device to configure."
+        },
+        "energy_optimization_mode": {
+          "name": "Energy optimization mode",
+          "description": "Set Disabled or Scheduled periods. Scheduled-only fields require the resulting mode to be scheduled."
+        },
+        "peak_discharging": {
+          "name": "Peak discharging",
+          "description": "Enable or disable discharging during peak tariff periods."
+        },
+        "off_peak_charging": {
+          "name": "Off-peak charging",
+          "description": "Enable or disable charging during off-peak tariff periods."
+        },
+        "off_peak_charging_power": {
+          "name": "Off-peak charging power",
+          "description": "Set the off-peak AC charging power in watts. The device-specific range and step are validated before writing."
+        }
+      }
+    },
+    "set_tariff_schedule": {
+      "name": "Set tariff schedule",
+      "description": "Replace the device's complete electricity tariff schedule using either a preset or a list of non-overlapping tariff periods.",
+      "fields": {
+        "device_id": {
+          "name": "DJI Power device",
+          "description": "The physical DJI Power device to configure."
+        },
+        "preset": {
+          "name": "Preset",
+          "description": "Replace the complete schedule with a verified all-day peak or all-day off-peak preset. Do not specify periods at the same time."
+        },
+        "periods": {
+          "name": "Tariff periods",
+          "description": "Replace the complete schedule with these tariff periods. Weekdays apply to the start day; an end time earlier than the start time crosses midnight. Do not specify a preset at the same time."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "tariff_period": {
+        "name": "Tariff period",
+        "state": {
+          "disabled": "Disabled",
+          "peak": "Peak",
+          "off_peak": "Off-peak",
+          "none": "None",
+          "unknown": "Unknown"
+        }
+      }
+    },
+    "button": {
+      "set_all_day_peak_tariff": {
+        "name": "Set all-day peak tariff"
+      },
+      "set_all_day_off_peak_tariff": {
+        "name": "Set all-day off-peak tariff"
+      }
+    }
+  }
+}

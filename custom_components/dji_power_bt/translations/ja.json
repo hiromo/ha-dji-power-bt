@@ -1,0 +1,224 @@
+{
+  "title": "DJI Power Bluetooth",
+  "config": {
+    "step": {
+      "select_device": {
+        "title": "DJI Power デバイスを選択",
+        "description": "現在 BLE 広告を送信している DJI Power を選択してください。BLE アドレスとモデルコードは Home Assistant の Bluetooth 検出情報から自動取得します。",
+        "data": {
+          "device": "DJI Power デバイス"
+        }
+      },
+      "auth_method": {
+        "title": "ローカル BLE ペアキーの取得方法",
+        "description": "デバイス固有の 32文字 HEX ペアキーを取得する方法を選択します。DJI アカウント／member token は初回設定時だけクラウドへアクセスし、通常動作はローカル BLE のみです。",
+        "menu_options": {
+          "account": "DJI アカウント（実験的）",
+          "token": "取得済み DJI member token（上級者向け）",
+          "manual": "既知のペアキーを手入力"
+        }
+      },
+      "manual": {
+        "title": "ローカル BLE ペアキーを入力",
+        "description": "選択した DJI Power の 32文字 HEX ペアキーを入力してください。",
+        "data": {
+          "change_auth_method": "認証方式の選択に戻る",
+          "local_auth_key": "ローカルペアキー（32文字 HEX）",
+          "device_name": "Home Assistant 上のデバイス名"
+        }
+      },
+      "token": {
+        "title": "DJI member token を利用",
+        "description": "member token を一度だけ使い、DJI アカウントに登録されたデバイス情報の pair_info.pair_key を取得します。member token は config entry に保存しません。",
+        "data": {
+          "change_auth_method": "認証方式の選択に戻る",
+          "member_token": "DJI member token",
+          "device_name": "Home Assistant 上のデバイス名"
+        }
+      },
+      "account": {
+        "title": "DJI アカウントへログイン（実験的）",
+        "description": "DJI Home の非公開 API を利用するため、将来動作しなくなる可能性があります。メールアドレス、パスワード、CAPTCHA、取得した member token は設定中だけ保持し、保存しません。",
+        "data": {
+          "change_auth_method": "認証方式の選択に戻る",
+          "email": "DJI アカウントのメールアドレス",
+          "password": "DJI アカウントのパスワード",
+          "device_name": "Home Assistant 上のデバイス名"
+        }
+      },
+      "captcha": {
+        "title": "DJI 画像 CAPTCHA",
+        "description": "下の画像に表示された文字を入力してください。\n\n![DJI CAPTCHA]({image})",
+        "data": {
+          "change_auth_method": "認証方式の選択に戻る",
+          "captcha_code": "CAPTCHA 文字列"
+        }
+      },
+      "two_factor": {
+        "title": "DJI 認証コード",
+        "description": "DJI から要求されたメール認証コードまたは 2段階認証コードを入力してください。この非公開フローは実験的です。",
+        "data": {
+          "change_auth_method": "認証方式の選択に戻る",
+          "code": "認証コード"
+        }
+      },
+      "cloud_device": {
+        "title": "登録済み DJI デバイスを選択",
+        "description": "先に BLE で選択した実機に対応する DJI クラウド上のデバイスを選択してください。",
+        "data": {
+          "change_auth_method": "認証方式の選択に戻る",
+          "device": "登録済み DJI デバイス"
+        }
+      },
+      "reauth_confirm": {
+        "title": "DJI Power Bluetooth の再認証",
+        "description": "保存済みのローカルペアキーが無効になった可能性があります。新しい 32文字 HEX キーを入力してください。",
+        "data": {
+          "local_auth_key": "ローカルペアキー（32文字 HEX）"
+        }
+      }
+    },
+    "error": {
+      "invalid_key": "ローカルペアキーは 32文字の HEX である必要があります。",
+      "cloud_lookup_failed": "DJI のデバイス一覧を取得できませんでした。非公開 API の変更、または token の無効化が考えられます。",
+      "no_cloud_devices": "ローカル BLE ペアキーを持つ登録済み DJI デバイスが見つかりませんでした。",
+      "invalid_captcha": "画像 CAPTCHA が拒否されました。",
+      "login_failed": "DJI アカウントへのログインに失敗しました。",
+      "invalid_code": "認証コードが拒否されました。",
+      "required": "この項目は必須です。",
+      "rate_limited": "DJI 側で認証試行が一時的に制限されています。時間を置いて再試行してください。"
+    },
+    "abort": {
+      "already_configured": "この DJI Power デバイスはすでに設定されています。",
+      "no_devices_found": "未登録かつ接続可能な DJI Power の BLE 広告が見つかりません。DJI Home アプリの接続を切って再試行してください。",
+      "device_disappeared": "選択した DJI Power の BLE 広告が見つからなくなりました。",
+      "not_supported": "対応する DJI Power の BLE 広告ではありません。",
+      "cloud_lookup_failed": "DJI クラウドからの取得に失敗しました。",
+      "no_cloud_devices": "ペアキーを持つ DJI クラウドデバイスが見つかりませんでした。",
+      "invalid_pair_key_from_cloud": "DJI クラウドから不正なペアキーが返されました。",
+      "reauth_successful": "DJI Power のペアキーを更新しました。"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DJI Power Bluetooth オプション",
+        "description": "最新の BLE テレメトリを Home Assistant のエンティティへ反映する頻度を設定します。BLE Notify 自体は元の頻度で受信・解析します。",
+        "data": {
+          "telemetry_update_interval": "テレメトリ反映間隔（秒）"
+        }
+      }
+    }
+  },
+  "selector": {
+    "tariff_preset": {
+      "options": {
+        "all_day_peak": "全日ピーク",
+        "all_day_off_peak": "全日オフピーク"
+      }
+    },
+    "tariff_kind": {
+      "options": {
+        "peak": "ピーク",
+        "off_peak": "オフピーク"
+      }
+    },
+    "tariff_weekday": {
+      "options": {
+        "mon": "月曜日",
+        "tue": "火曜日",
+        "wed": "水曜日",
+        "thu": "木曜日",
+        "fri": "金曜日",
+        "sat": "土曜日",
+        "sun": "日曜日"
+      }
+    }
+  },
+  "services": {
+    "start_protocol_capture": {
+      "name": "プロトコルキャプチャーを開始",
+      "description": "認証情報を除外した DJI Power プロトコル Payload を、件数と時間を制限してメモリ内へ保存します。現象を再現した後、統合の診断情報をダウンロードしてください。",
+      "fields": {
+        "device_id": {
+          "name": "DJI Power デバイス",
+          "description": "キャプチャー対象の物理 DJI Power デバイス。"
+        },
+        "duration_seconds": {
+          "name": "時間",
+          "description": "キャプチャーを継続する最長時間（秒）。"
+        },
+        "max_frames": {
+          "name": "最大フレーム数",
+          "description": "安全なプロトコルフレームをこの件数まで保存します。"
+        }
+      }
+    },
+    "set_scheduled_energy_settings": {
+      "name": "スケジュール充放電設定を一括変更",
+      "description": "既知の 0x1018 スケジュール充放電項目を、1回の BLE read-modify-write でまとめて変更します。指定しない項目は保持します。",
+      "fields": {
+        "device_id": {
+          "name": "DJI Power デバイス",
+          "description": "設定対象の DJI Power 実機です。"
+        },
+        "energy_optimization_mode": {
+          "name": "Energy optimization mode",
+          "description": "Disabled または Scheduled periods を設定します。Scheduled 専用項目は、変更後のモードが scheduled の場合だけ指定できます。"
+        },
+        "peak_discharging": {
+          "name": "ピーク時間中の放電",
+          "description": "ピーク料金時間中の放電を有効または無効にします。"
+        },
+        "off_peak_charging": {
+          "name": "オフピーク時間中の充電",
+          "description": "オフピーク料金時間中の充電を有効または無効にします。"
+        },
+        "off_peak_charging_power": {
+          "name": "オフピーク充電電力",
+          "description": "オフピーク AC 充電電力を W 単位で設定します。機種固有の範囲と step は書き込み前に検証します。"
+        }
+      }
+    },
+    "set_tariff_schedule": {
+      "name": "料金時間帯設定を変更",
+      "description": "プリセットまたは重複しない料金時間帯の一覧を使用して、デバイスに保存されている電気料金時間帯設定全体を置き換えます。",
+      "fields": {
+        "device_id": {
+          "name": "DJI Power デバイス",
+          "description": "設定対象の DJI Power 実機です。"
+        },
+        "preset": {
+          "name": "プリセット",
+          "description": "料金表全体を確認済みの全日ピークまたは全日オフピーク設定に置き換えます。時間帯一覧と同時には指定できません。"
+        },
+        "periods": {
+          "name": "料金時間帯",
+          "description": "料金表全体をこの時間帯一覧に置き換えます。曜日は開始日の曜日です。終了時刻が開始時刻より前なら翌日にまたがります。プリセットと同時には指定できません。"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "tariff_period": {
+        "name": "Tariff period",
+        "state": {
+          "disabled": "Disabled",
+          "peak": "Peak",
+          "off_peak": "Off-peak",
+          "none": "None",
+          "unknown": "Unknown"
+        }
+      }
+    },
+    "button": {
+      "set_all_day_peak_tariff": {
+        "name": "全時間帯をピーク料金に設定"
+      },
+      "set_all_day_off_peak_tariff": {
+        "name": "全時間帯をオフピーク料金に設定"
+      }
+    }
+  }
+}
