@@ -129,12 +129,19 @@ Assistant host and backups because they contain the key. If cloud acquisition
 still works, storing the key separately in an encrypted password manager or
 secret vault can preserve a recovery path if DJI later changes the private API.
 
-As a last-resort recovery method for a station you own, the key can also be
-identified by capturing and analyzing the BLE authentication exchange between
-DJI Home and the station: the second command `0x6A` request contains the
-32 ASCII hexadecimal key bytes. Such captures contain authentication secrets;
-keep them private, use them only on devices and traffic you are authorized to
-inspect, and delete or encrypt the raw capture after recovery.
+As a last-resort recovery method for a station you own, the 32-character
+hexadecimal pair key can also be obtained by capturing and analyzing the BLE
+authentication exchange recorded in an Android Bluetooth HCI snoop log. This
+project began with that approach. Enable Bluetooth HCI snoop logging on Android,
+turn off both mobile data and Wi-Fi, leave only Bluetooth enabled, and then use
+DJI Home to connect to the DJI Power station while the exchange is being
+captured. The second command `0x6A` request in that exchange contains the 32
+ASCII hexadecimal key bytes.
+
+HCI snoop logs and full Android bug reports can contain authentication secrets,
+device identifiers, and unrelated nearby Bluetooth traffic. Keep them private,
+use this method only with devices and traffic you are authorized to inspect,
+and delete or encrypt the raw capture after recovering the key.
 
 ## Main features
 
@@ -213,9 +220,9 @@ firmware.
 
 ### Tariff schedule action
 
-`dji_power_bt.set_tariff_schedule` completely replaces the Power 2000 tariff
-table. Supply either an all-day `preset` or a complete `periods` list, never
-both. For example:
+`dji_power_bt.set_tariff_schedule` is the action that Automations should call
+directly. It completely replaces the Power 2000 tariff table. Supply either an
+all-day `preset` or a complete `periods` list, never both. For example:
 
 ```yaml
 action: dji_power_bt.set_tariff_schedule
@@ -238,10 +245,11 @@ times are allowed. Detailed period writes are based on the observed tariff
 record layout but have not yet been validated on real hardware; the two all-day
 presets have been validated on Power 2000.
 
-### Combined scheduled-energy service
+### Combined scheduled-energy action
 
-`dji_power_bt.set_scheduled_energy_settings` updates one or more of the
-following Power 2000 settings in one safe `0x1018` read-modify-write operation:
+`dji_power_bt.set_scheduled_energy_settings` is a Home Assistant action. It
+updates one or more of the following Power 2000 settings in one safe `0x1018`
+read-modify-write operation:
 
 | Field | Value |
 |---|---|
@@ -308,11 +316,11 @@ a name-only advertisement without manufacturer data; that packet is not enough
 for safe model detection and is not listed.
 
 Make sure DJI Home is not holding a Bluetooth connection to the station, keep
-the station and adapter/proxy nearby, wait for a later advertisement containing
-manufacturer data, and retry setup. In observed cases, the manufacturer-data
-advertisement appeared after waiting. DJI Home may remain in use over Wi-Fi or
-the DJI cloud; only avoid initiating a DJI Home Bluetooth connection to that
-station while Home Assistant is discovering or connecting.
+the station and adapter/proxy nearby, wait about 3–5 minutes for a later
+advertisement containing manufacturer data, and retry setup. In observed cases,
+the manufacturer-data advertisement appeared after waiting. DJI Home may remain
+in use over Wi-Fi or the DJI cloud; only avoid initiating a DJI Home Bluetooth
+connection to that station while Home Assistant is discovering or connecting.
 
 ### Unstable connection or reconnect delay
 
