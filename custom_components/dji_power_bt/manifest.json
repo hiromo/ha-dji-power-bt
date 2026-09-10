@@ -1,6 +1,11 @@
 {
   "domain": "dji_power_bt",
   "name": "DJI Power Bluetooth",
+  "bluetooth": [
+    {
+      "manufacturer_id": 2218
+    }
+  ],
   "codeowners": [
     "@hiromo"
   ],
@@ -10,13 +15,8 @@
     "bluetooth_adapters"
   ],
   "documentation": "https://github.com/hiromo/ha-dji-power-bt",
-  "bluetooth": [
-    {
-      "manufacturer_id": 2218
-    }
-  ],
+  "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/hiromo/ha-dji-power-bt/issues",
-  "version": "0.7.31",
-  "integration_type": "device"
+  "version": "0.7.31"
 }

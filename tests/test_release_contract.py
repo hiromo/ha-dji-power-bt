@@ -141,6 +141,7 @@ def test_public_documentation_is_english_and_user_focused() -> None:
 
 def test_integration_identity_is_dji_power_bt() -> None:
     manifest = json.loads((COMPONENT / "manifest.json").read_text())
+    setup_source = (COMPONENT / "__init__.py").read_text()
     strings = json.loads((COMPONENT / "strings.json").read_text())
     en = json.loads((COMPONENT / "translations" / "en.json").read_text())
     ja = json.loads((COMPONENT / "translations" / "ja.json").read_text())
@@ -150,6 +151,7 @@ def test_integration_identity_is_dji_power_bt() -> None:
     assert not (ROOT / "custom_components" / "dji_power").exists()
     assert manifest["domain"] == "dji_power_bt"
     assert manifest["name"] == "DJI Power Bluetooth"
+    assert "CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)" in setup_source
     assert "integration: dji_power_bt" in services
     assert strings["title"] == "DJI Power Bluetooth"
     assert en["title"] == "DJI Power Bluetooth"

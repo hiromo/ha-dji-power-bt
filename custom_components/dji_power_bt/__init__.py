@@ -45,6 +45,8 @@ from .runtime import get_domain_runtime
 
 type DjiPowerConfigEntry = ConfigEntry[DjiPowerManager]
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 _SERVICE_CAPTURE_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_DEVICE_ID): cv.string,
