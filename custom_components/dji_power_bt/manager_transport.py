@@ -4,13 +4,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import weakref
+from collections.abc import Callable
 from typing import Any
 
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 
 from .const import CHAR_WRITE_C304, DOMAIN
-from .manager_constants import GATT_WRITE_TIMEOUT
+from .manager_constants import GATT_WRITE_TIMEOUT, WRITE_LOCK_TIMEOUT
 from .manager_types import DjiPowerAuthError, DjiPowerConnectionError, PendingVerification
 from .manager_utils import utcnow_iso
 from .protocol import (
@@ -24,6 +26,26 @@ from .write_policy import ACTIVE_WRITE_VERIFICATION, WriteVerificationPolicy, sn
 _LOGGER = logging.getLogger(__name__)
 
 class ManagerTransportMixin:
+    def _notification_callback(
+        self, client: Any
+    ) -> Callable[[Any, bytearray], None]:
+        """Bind ingress to one adopted client and generation, without owning it."""
+        client_ref = weakref.ref(client)
+        generation = self._connection_generation
+
+        def on_notify(sender: Any, data: bytearray) -> None:
+            origin = client_ref()
+            if (
+                origin is None
+                or origin is not self._client
+                or generation != self._connection_generation
+            ):
+                self._gatt_traffic.stale_notification_count += 1
+                return
+            self._on_notify(sender, data)
+
+        return on_notify
+
     def _alloc_seq(self) -> int:
         seq = self._next_seq
         self._next_seq = (self._next_seq + 1) & 0xFFFF
@@ -108,6 +130,7 @@ class ManagerTransportMixin:
 
     def _apply_config(self, cfg: PowerConfig, *, source: str, notify: bool = True) -> None:
         self.state.config = cfg
+        self._unconfirmed_config_writes.clear()
         self._sync_device_registry_firmware()
         self._config_generation += 1
         # _apply_config is only called for a parsed device report/read response.
@@ -141,13 +164,21 @@ class ManagerTransportMixin:
             return
         registry.async_update_device(device.id, sw_version=firmware)
 
-    async def _write_frame(self, *, seq: int, cmd_type: int, cmd_set: int, cmd_id: int, payload: bytes, response: bool = True) -> bytes:
+    async def _write_frame(
+        self,
+        *,
+        seq: int,
+        cmd_type: int,
+        cmd_set: int,
+        cmd_id: int,
+        payload: bytes,
+        response: bool = True,
+    ) -> bytes:
         client = self._client
+        generation = self._connection_generation
         if client is None or not client.is_connected:
             raise DjiPowerConnectionError("BLE client is not connected")
-        raw = build_duml_frame(seq=seq, cmd_type=cmd_type, cmd_set=cmd_set, cmd_id=cmd_id, payload=payload)
-        self._record_safe_payload(
-            direction="tx",
+        raw = build_duml_frame(
             seq=seq,
             cmd_type=cmd_type,
             cmd_set=cmd_set,
@@ -155,37 +186,80 @@ class ManagerTransportMixin:
             payload=payload,
         )
         context = f"0x{cmd_set:02X}/0x{cmd_id:02X} seq=0x{seq:04X}"
+        stats = self._gatt_traffic
+        loop = asyncio.get_running_loop()
+        queued_at = loop.time()
+        stats.write_waiters += 1
+        stats.max_write_waiters = max(stats.max_write_waiters, stats.write_waiters)
         try:
-            # Cover both waiting for a previous write and the backend GATT call.
-            # This prevents a stuck ACK task from retaining the lock forever and
-            # blocking authentication after reconnection.
-            async with asyncio.timeout(GATT_WRITE_TIMEOUT):
-                async with self._write_lock:
-                    self._write_lock_acquired_monotonic = (
-                        asyncio.get_running_loop().time()
-                    )
-                    self._write_lock_context = context
-                    try:
-                        await client.write_gatt_char(
-                            CHAR_WRITE_C304,
-                            raw,
-                            response=response,
-                        )
-                    finally:
-                        self._write_lock_acquired_monotonic = None
-                        self._write_lock_context = None
+            async with asyncio.timeout(WRITE_LOCK_TIMEOUT):
+                await self._write_lock.acquire()
         except TimeoutError as exc:
-            now = utcnow_iso()
+            stats.write_lock_timeout_count += 1
             self.state.gatt_write_timeout_count += 1
-            self.state.last_gatt_write_timeout_at = now
-            self.state.last_error = f"GATT write timeout: {context}"
-            self.state.last_connection_error = self.state.last_error
-            self.state.last_connection_error_at = now
-            self._transport_unhealthy_reason = "gatt_write_timeout"
-            self._notify_listeners()
+            self.state.last_gatt_write_timeout_at = utcnow_iso()
             raise DjiPowerConnectionError(
-                f"GATT write timed out after {GATT_WRITE_TIMEOUT:.0f}s: {context}"
+                f"GATT write queue timed out after {WRITE_LOCK_TIMEOUT:.0f}s: {context}"
             ) from exc
+        finally:
+            stats.write_waiters -= 1
+            stats.max_write_lock_wait_s = max(
+                stats.max_write_lock_wait_s, loop.time() - queued_at
+            )
+
+        try:
+            # A queued operation belongs to the link on which it was created.
+            if (
+                client is not self._client
+                or generation != self._connection_generation
+                or not client.is_connected
+            ):
+                stats.stale_write_rejected_count += 1
+                raise DjiPowerConnectionError("BLE connection changed while waiting to write")
+            self._record_safe_payload(
+                direction="tx", seq=seq, cmd_type=cmd_type, cmd_set=cmd_set,
+                cmd_id=cmd_id, payload=payload,
+            )
+            command = (
+                f"0x{cmd_id:02x}"
+                if cmd_set == 0x5A and cmd_id in {0x60, 0x62, 0x63}
+                else "other"
+            )
+            stats.write_attempts_by_command[command] = (
+                stats.write_attempts_by_command.get(command, 0) + 1
+            )
+            started_at = loop.time()
+            self._write_lock_acquired_monotonic = started_at
+            self._write_lock_context = context
+            try:
+                async with asyncio.timeout(GATT_WRITE_TIMEOUT):
+                    await client.write_gatt_char(CHAR_WRITE_C304, raw, response=response)
+                stats.write_completions_by_command[command] = (
+                    stats.write_completions_by_command.get(command, 0) + 1
+                )
+            except TimeoutError as exc:
+                stats.backend_write_timeout_count += 1
+                self.state.gatt_write_timeout_count += 1
+                now = utcnow_iso()
+                self.state.last_gatt_write_timeout_at = now
+                # An old backend must not poison a newly adopted connection.
+                if client is self._client and generation == self._connection_generation:
+                    self.state.last_error = f"GATT write timeout: {context}"
+                    self.state.last_connection_error = self.state.last_error
+                    self.state.last_connection_error_at = now
+                    self._transport_unhealthy_reason = "gatt_write_timeout"
+                    self._notify_listeners()
+                raise DjiPowerConnectionError(
+                    f"GATT write timed out after {GATT_WRITE_TIMEOUT:.0f}s: {context}"
+                ) from exc
+            finally:
+                stats.max_backend_write_s = max(
+                    stats.max_backend_write_s, loop.time() - started_at
+                )
+        finally:
+            self._write_lock_acquired_monotonic = None
+            self._write_lock_context = None
+            self._write_lock.release()
         return raw
 
     async def _request(self, *, cmd_id: int, payload: bytes, timeout: float = 10.0) -> DumlFrame:
@@ -257,6 +331,17 @@ class ManagerTransportMixin:
         cfg = await self._read_current_config()
         self._apply_config(cfg, source=refresh_source, notify=False)
         return cfg
+
+    def _skip_unchanged_config_write(self, tlv: int, unchanged: bool) -> bool:
+        """Coalesce matching targets without treating an expired optimistic value as fact."""
+        if not unchanged:
+            return False
+        unconfirmed_key = self._unconfirmed_config_writes.get(tlv)
+        if unconfirmed_key is not None and unconfirmed_key not in self._pending_verifications:
+            return False
+        # A live verification may coalesce a duplicate, but remains unconfirmed.
+        self._gatt_traffic.unchanged_write_skip_count += 1
+        return True
 
     async def _send_0x63_and_apply(
         self,
@@ -388,6 +473,7 @@ class ManagerTransportMixin:
             "verified_at": None,
         }
         self._write_history.append(history_record)
+        self._unconfirmed_config_writes[expected_tlv] = verification_key
         self._schedule_write_verification(
             key=verification_key,
             expected=expected,
@@ -581,8 +667,14 @@ class ManagerTransportMixin:
         self.state.write_verification_pending = False
 
     def _schedule_0x62_ack(self, frame: DumlFrame) -> None:
-        task = self.hass.loop.create_task(self._ack_0x62(frame))
+        task = self.hass.loop.create_task(
+            self._ack_0x62(frame, generation=self._connection_generation)
+        )
         self._ack_tasks.add(task)
+        self._gatt_traffic.ack_scheduled_count += 1
+        self._gatt_traffic.max_pending_ack_tasks = max(
+            self._gatt_traffic.max_pending_ack_tasks, len(self._ack_tasks)
+        )
         task.add_done_callback(self._ack_tasks.discard)
 
     def _cancel_ack_tasks(self) -> None:
@@ -591,7 +683,10 @@ class ManagerTransportMixin:
                 task.cancel()
         self._ack_tasks.clear()
 
-    async def _ack_0x62(self, frame: DumlFrame) -> None:
+    async def _ack_0x62(self, frame: DumlFrame, *, generation: int | None = None) -> None:
+        if generation is not None and generation != self._connection_generation:
+            self._gatt_traffic.stale_write_rejected_count += 1
+            return
         try:
             await self._write_frame(
                 seq=frame.seq,

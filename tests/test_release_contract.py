@@ -458,7 +458,8 @@ def test_unexpected_disconnect_requires_fresh_advertisement() -> None:
     assert "async_clear_advertisement_history" in source
     assert "async_process_advertisements" in source
     assert 'resolution="fresh_after_disconnect"' in source
-    assert "Fresh advertisement is required before reconnecting" in source
+    # The removed connector callback was never invoked. Executable lifecycle
+    # tests cover the real gate and rejection of its cached-device fallback.
     assert "self._last_ble_device = None" in source
 
 

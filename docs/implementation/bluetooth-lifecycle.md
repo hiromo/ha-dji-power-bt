@@ -58,6 +58,24 @@ On an unexpected callback for the active client:
 
 The fresh advertisement wait has a 60-second timeout.
 
+Normal discovery first uses HA's current connectable device for the exact
+address. If absent, it awaits `async_process_advertisements` for the configured
+scan timeout capped at 15 seconds, retaining the existing one-shot cached-device
+fallback. Supported HA versions use event-driven waiting; the one-second poll
+remains only as a compatibility fallback when that API is unavailable.
+Unexpected-disconnect resolution still uses the separate history-clearing,
+settle, and fresh-advertisement gate; it cannot use the cached fallback.
+
+Address-only waits remain PASSIVE. They do not require scan-response fields.
+ACTIVE requests an additional active sweep on supported HA scanners; it is not
+a DJI authentication, reset, or reconnection command. Do not enable it merely
+because the eventual GATT connection is active.
+
+The obsolete `ble_device_callback` argument is not passed to the connector:
+version 4.7.0 accepts it but never invokes it. Each outer connection attempt
+resolves its device before calling the connector; the limited internal retry
+loop does not call an integration-supplied device resolver.
+
 This gate exists because reconnecting with a BLEDevice cached before the disconnect previously reproduced unstable backend/client ownership behavior.
 
 ## Reconnect backoff

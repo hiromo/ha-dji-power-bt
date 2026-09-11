@@ -17,6 +17,25 @@ class DjiPowerConnectionError(HomeAssistantError):
     """Connection failed."""
 
 
+@dataclass(slots=True)
+class GattTrafficStats:
+    """Bounded, payload-free counters since manager setup."""
+
+    write_attempts_by_command: dict[str, int] = field(default_factory=dict)
+    write_completions_by_command: dict[str, int] = field(default_factory=dict)
+    write_lock_timeout_count: int = 0
+    backend_write_timeout_count: int = 0
+    write_waiters: int = 0
+    max_write_waiters: int = 0
+    max_write_lock_wait_s: float = 0.0
+    max_backend_write_s: float = 0.0
+    ack_scheduled_count: int = 0
+    max_pending_ack_tasks: int = 0
+    unchanged_write_skip_count: int = 0
+    stale_notification_count: int = 0
+    stale_write_rejected_count: int = 0
+
+
 
 @dataclass(slots=True)
 class PendingVerification:

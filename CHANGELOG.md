@@ -9,6 +9,25 @@ notable user impact rather than every internal code change.
 
 ## Unreleased
 
+## 0.7.32 - 2026-09-11
+
+- Suppressed redundant setting writes, including repeated automation calls,
+  while preserving device-report verification and retrying values that remain
+  unconfirmed.
+- Separated GATT write-queue and backend-operation timeouts so local queue
+  congestion alone no longer marks the active Bluetooth transport unhealthy.
+- Rejected stale notifications, queued writes, and delayed configuration ACKs
+  after a replacement BLE connection has been adopted.
+- Replaced normal device-resolution polling with Home Assistant's event-driven
+  advertisement wait and removed the connector's deprecated, unused device
+  callback.
+- Added runtime diagnostics for per-command writes, completed backend writes,
+  queue/backend timeouts and latency maxima, ACK task depth, suppressed writes,
+  and stale-operation rejections.
+- Preserved the current DJI application traffic: initial `0x60` request,
+  conditional `0x62` ACK, connection parameters, and watchdog threshold are
+  unchanged while the new diagnostics gather field evidence.
+
 ## 0.7.31 - 2026-09-10
 
 - Added `dji_power_bt.set_tariff_schedule` for complete Power 2000 tariff-table

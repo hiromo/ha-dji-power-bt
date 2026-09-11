@@ -291,6 +291,36 @@ identity. The configured normalized BLE address is authoritative, and successful
 
 ## Redaction and compatibility rules
 
+### GATT traffic and contention counters
+
+`state.gatt_traffic.scope = manager_runtime_since_setup`. These counters survive
+reconnects and BLE OFF/ON within the same manager, and reset on entry reload.
+They are bounded counters/maxima, not a packet history:
+
+- `write_attempts_by_command` counts calls entering the backend;
+  `write_completions_by_command` counts successful backend returns. Keys are
+  `0x60`, `0x62`, `0x63`, and `other`; no authentication payload or credential is
+  recorded. A GATT completion does not prove DJI application acceptance.
+- `write_lock_timeout_count` and `backend_write_timeout_count` split the legacy
+  aggregate `gatt_write_timeout_count`. Only the latter can mark the same active
+  generation unhealthy.
+- `write_waiters`, `max_write_waiters`, `max_write_lock_wait_s`, and
+  `max_backend_write_s` expose current queue depth and runtime high-water marks.
+  Durations include failed/cancelled waits or backend calls.
+- `ack_scheduled_count` and `max_pending_ack_tasks` describe task scheduling;
+  successful ACK writes are `write_completions_by_command["0x62"]` in the
+  current implementation. Scheduling is not delivery.
+- `unchanged_write_skip_count` counts coalesced setting calls, including
+  duplicates of a transaction still awaiting verification.
+- `stale_notification_count` and `stale_write_rejected_count` count rejected
+  operations from obsolete clients/generations.
+
+`runtime_tuning.write_lock_timeout_s` is additive. The queue and backend write
+deadlines are independently 10 seconds. Waiting time alone does not show that
+the station or Bluetooth controller has stopped responding.
+
+### Export redaction
+
 Before Home Assistant exports the snapshot, the integration:
 
 - masks the device-specific portion of BLE addresses;

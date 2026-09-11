@@ -337,7 +337,7 @@ class ManagerConnectionMixin:
                             )
                             async with asyncio.timeout(START_NOTIFY_TIMEOUT):
                                 await client.start_notify(
-                                    CHAR_NOTIFY_C305, self._on_notify
+                                    CHAR_NOTIFY_C305, self._notification_callback(client)
                                 )
                             self._record_connection_event(
                                 "notify_started",
@@ -380,7 +380,7 @@ class ManagerConnectionMixin:
                             )
                             async with asyncio.timeout(START_NOTIFY_TIMEOUT):
                                 await client.start_notify(
-                                    CHAR_NOTIFY_C305, self._on_notify
+                                    CHAR_NOTIFY_C305, self._notification_callback(client)
                                 )
                             self._record_connection_event(
                                 "notify_started",
@@ -424,13 +424,13 @@ class ManagerConnectionMixin:
                         self._notify_listeners()
                     except asyncio.CancelledError:
                         self._active_connection_failure_phase = (
-                            self.state.connection_phase
+                            self._active_connection_failure_phase or self.state.connection_phase
                         )
                         await self._abort_connection_setup(client)
                         raise
                     except Exception:
                         self._active_connection_failure_phase = (
-                            self.state.connection_phase
+                            self._active_connection_failure_phase or self.state.connection_phase
                         )
                         await self._abort_connection_setup(client)
                         raise
@@ -638,7 +638,6 @@ class ManagerConnectionMixin:
             name=self.connector_name,
             disconnected_callback=self._disconnected_callback,
             max_attempts=ESTABLISH_CONNECTION_MAX_ATTEMPTS,
-            ble_device_callback=self._ble_device_callback,
             timeout=30.0,
         )
         self._record_connection_event(
@@ -928,6 +927,7 @@ class ManagerConnectionMixin:
         # Never reuse a pre-disconnect configuration snapshot on a new BLE link,
         # even when reconnection occurs within the normal cache-age window.
         self._last_config_report_monotonic = None
+        self._unconfirmed_config_writes.clear()
 
     def _disconnected_callback(self, client: BleakClient) -> None:
         self.hass.loop.call_soon_threadsafe(self._handle_disconnected_callback, client)
@@ -968,6 +968,13 @@ class ManagerConnectionMixin:
             )
             return
 
+        if (
+            self._active_connection_attempt_id is not None
+            and self.state.connection_phase != "ready"
+        ):
+            self._active_connection_failure_phase = (
+                self._active_connection_failure_phase or self.state.connection_phase
+            )
         self._client = None
         self._retired_client = client
         self.state.connected = False
@@ -1018,9 +1025,10 @@ class ManagerConnectionMixin:
                 "No connectable Home Assistant Bluetooth scanner is available"
             )
 
-        deadline = asyncio.get_running_loop().time() + min(
-            max(self.scan_timeout, 1.0), 15.0
-        )
+        wait_seconds = min(max(self.scan_timeout, 1.0), 15.0)
+        deadline = asyncio.get_running_loop().time() + wait_seconds
+        process_advertisements = getattr(bluetooth, "async_process_advertisements", None)
+        scanning_mode = getattr(bluetooth, "BluetoothScanningMode", None)
         while True:
             device = bluetooth.async_ble_device_from_address(
                 self.hass,
@@ -1033,6 +1041,28 @@ class ManagerConnectionMixin:
                 self._cached_device_retry_used = False
                 return device
 
+            if callable(process_advertisements) and scanning_mode is not None:
+                def matches(service_info: Any) -> bool:
+                    try:
+                        return normalize_address(service_info.address) == self.address
+                    except (AttributeError, ValueError):
+                        return False
+
+                try:
+                    service_info = await process_advertisements(
+                        self.hass, matches,
+                        {"address": self.address, "connectable": True},
+                        scanning_mode.PASSIVE, wait_seconds,
+                    )
+                except TimeoutError:
+                    break
+                device = service_info.device
+                self._validate_and_record_ble_device(device, resolution="ha_current")
+                self._last_ble_device = device
+                self._cached_device_retry_used = False
+                return device
+
+            # Compatibility only: supported HA versions wait on advertisements.
             if asyncio.get_running_loop().time() >= deadline:
                 break
             await asyncio.sleep(1.0)
@@ -1069,30 +1099,6 @@ class ManagerConnectionMixin:
             f"DJI Power {self.address} is not reachable via Home Assistant Bluetooth"
             + (f": {reason}" if reason else "")
         )
-
-    def _ble_device_callback(self) -> BLEDevice:
-        """Return the freshest HA-managed BLEDevice for this exact address."""
-        device = bluetooth.async_ble_device_from_address(
-            self.hass,
-            self.address,
-            connectable=True,
-        )
-        if device is not None:
-            self._validate_and_record_ble_device(device, resolution="ha_current")
-            self._last_ble_device = device
-            self._cached_device_retry_used = False
-            return device
-        if self._fresh_advertisement_required:
-            raise DjiPowerConnectionError(
-                f"Fresh advertisement is required before reconnecting {self.address}"
-            )
-        if self._last_ble_device is None:
-            raise DjiPowerConnectionError(f"No cached BLEDevice for {self.address}")
-        self._validate_and_record_ble_device(
-            self._last_ble_device,
-            resolution="ha_cached",
-        )
-        return self._last_ble_device
 
     def _validate_and_record_ble_device(
         self,

@@ -14,6 +14,7 @@ from .manager_constants import (
     GATT_WRITE_TIMEOUT,
     NOTIFY_WATCHDOG_TIMEOUT,
     OUTPUT_TABLE_CACHE_MAX_AGE_SECONDS,
+    WRITE_LOCK_TIMEOUT,
 )
 from .write_policy import ACTIVE_WRITE_VERIFICATION, OFF_PEAK_POWER_WRITE_VERIFICATION
 
@@ -67,6 +68,7 @@ def manager_runtime_snapshot(manager: Any) -> dict[str, Any]:
         "runtime_tuning": {
             "notify_watchdog_timeout_s": NOTIFY_WATCHDOG_TIMEOUT,
             "gatt_write_timeout_s": GATT_WRITE_TIMEOUT,
+            "write_lock_timeout_s": WRITE_LOCK_TIMEOUT,
             "config_cache_max_age_s": CONFIG_CACHE_MAX_AGE_SECONDS,
             "output_table_cache_max_age_s": OUTPUT_TABLE_CACHE_MAX_AGE_SECONDS,
             "active_verification_wait_for_report_s": ACTIVE_WRITE_VERIFICATION.wait_for_report_s,
@@ -96,6 +98,10 @@ def manager_runtime_snapshot(manager: Any) -> dict[str, Any]:
             "output_table_cache_max_age_s": OUTPUT_TABLE_CACHE_MAX_AGE_SECONDS,
             "active_verification_wait_for_report_s": ACTIVE_WRITE_VERIFICATION.wait_for_report_s,
             "off_peak_power_passive_wait_s": OFF_PEAK_POWER_WRITE_VERIFICATION.wait_for_report_s,
+        },
+        "gatt_traffic": {
+            "scope": "manager_runtime_since_setup",
+            **asdict(manager._gatt_traffic),
         },
         "write_history": manager.write_history,
         "gatt_frame_reassembly": manager.reassembly_diagnostics,

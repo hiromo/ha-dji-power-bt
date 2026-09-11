@@ -15,7 +15,9 @@ The implemented application command set is `0x5A`.
 
 ## 0x60 configuration read
 
-The manager sends `DEFAULT_STATUS_REQUEST_PAYLOAD`, currently requesting these keys:
+The manager sends the retained 48-byte `DEFAULT_STATUS_REQUEST_PAYLOAD` literal.
+Historically its two-byte source-code groups have been described as requesting
+these keys:
 
 ```text
 0x1002 0x1003 0x1005 0x1006 0x1007 0x1008
@@ -23,6 +25,16 @@ The manager sends `DEFAULT_STATUS_REQUEST_PAYLOAD`, currently requesting these k
 0x1015 0x1016 0x1018 0x1019 0x101B 0x101E
 0x1020 0x1022 0x1023 0x1024 0x1025
 ```
+
+**Unknown request grammar:** those source-code groups do not independently
+establish the device's field boundaries or endianness. Another implementation
+sends the three-byte GETs `00 01 10` and `00 04 10` instead. Under the unconfirmed
+interpretation `00 + little-endian 16-bit selectors`, our literal would leave a
+trailing `25` byte. Successful configuration replies prove the literal has been
+accepted, not that every named key was requested as intended. See the
+[GET comparison backlog](unknowns.md#configuration-get-grammar-and-recovery)
+before changing this traffic. Do not silently append a byte or replace it with
+module sweeps on the strength of this interpretation alone.
 
 The device does not necessarily return every requested key. Returned-key presence is itself useful model/feature evidence; see `model-differences.md`.
 

@@ -7,8 +7,39 @@ v0.7.3 was superseded by the AC inlet/outlet model in v0.7.5.
 
 Current behavior is specified by the topical documents under `docs/`.
 
-Current public compatibility baseline: integration `v0.7.31`, Home Assistant
-config-entry version `1`.
+Current public release: integration `v0.7.32`. The public compatibility baseline
+remains config-entry version `1` from `v0.7.31`.
+
+## v0.7.32
+
+- Audited a retained Power 2000 long-session failure and compared the runtime
+  connection, authentication, initial configuration, and telemetry paths with
+  `zuyan9/ha-dji-power-ble`. Authentication is equivalent for Power 2000 and
+  Power 1000 Mini; initial `0x60` configuration reads and `0x62` ACK behavior
+  differ and remain controlled comparison candidates.
+- Suppressed unchanged `0x63` setting writes across individual setters. An
+  acknowledged optimistic value may coalesce duplicate automation calls only
+  while verification remains pending; an expired unconfirmed value can be sent
+  again.
+- Split bounded write-queue waiting from the backend GATT operation. Queue
+  expiry fails the operation without declaring the connection unhealthy;
+  backend timeout still recovers the same active connection generation.
+- Bound notification ingress, delayed ACKs, and queued writes to the originating
+  client/generation so retired work cannot affect a replacement connection.
+- Preserved the actual setup failure phase when the backend disconnect callback
+  resets connection state during setup.
+- Removed the connector's deprecated, unused `ble_device_callback`. Normal
+  address resolution now checks current HA state once and then waits for an
+  advertisement event, retaining the one-shot cache fallback and the stricter
+  post-disconnect fresh-advertisement gate.
+- Added bounded, payload-free runtime diagnostics for command write attempts and
+  completions, queue/backend timeout splits and maxima, ACK scheduling depth,
+  coalesced writes, and stale-operation rejection.
+- Kept the legacy initial `0x60`, conditional `0x62` ACK, PASSIVE advertisement
+  waits, negotiated connection parameters, and notification watchdog unchanged
+  for this validation stage.
+- Added executable regression coverage for all changed setter and lifecycle
+  paths. The release suite contains 119 passing tests.
 
 ## Public packaging and documentation preparation
 

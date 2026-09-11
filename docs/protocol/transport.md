@@ -40,13 +40,24 @@ A response satisfies a request only when all of the following match:
 - command ID;
 - response command type `0x80`.
 
-This prevents a delayed response from an old BLE link from completing a request on a new link after reconnect.
+Each notification subscription also binds the originating client through a weak
+reference and captures its generation. Stale callbacks are rejected before
+timestamp updates, reassembly, response routing, or unsolicited handling.
+Dictionary generation keys alone cannot identify a callback's originating link.
 
 ## GATT write serialization
 
-Per-device GATT writes are serialized by `_write_lock`. The timeout covers both waiting for the lock and the backend `write_gatt_char()` call. Current timeout: 10 seconds.
+Per-device GATT writes are serialized by `_write_lock`. Lock acquisition and
+the backend `write_gatt_char()` call each have a separate 10-second deadline.
+Neither stage can wait indefinitely. Maximum combined waiting/write budget is
+20 seconds, before any application response timeout.
 
-A timeout marks the transport unhealthy, increments diagnostics, fails the operation, and leaves reconnect/error handling to the manager lifecycle.
+A queue timeout fails the operation and increments diagnostics without marking
+the BLE transport unhealthy. A backend write timeout still marks the same
+active generation unhealthy. Writes revalidate the originating client and
+generation after acquiring the lock, and delayed ACK tasks check their original
+generation before entering the write path. Safe TX capture occurs immediately
+before a backend attempt, so it is not proof of successful delivery.
 
 ## Persistent connection model
 

@@ -51,17 +51,18 @@ Failure after a client has been created must:
 
 ## GATT write timeout
 
-Current timeout is 10 seconds and covers waiting for the per-device write lock plus backend write completion.
-
-On timeout:
-
-- increment `gatt_write_timeout_count`;
-- set `last_gatt_write_timeout_at`;
-- set a connection error string;
-- mark transport unhealthy;
-- fail the caller with `DjiPowerConnectionError`.
+Lock acquisition and backend write completion each have a 10-second timeout.
+Both increment the legacy aggregate `gatt_write_timeout_count`, update
+`last_gatt_write_timeout_at`, and fail the caller with
+`DjiPowerConnectionError`. Additive `gatt_traffic` counters distinguish the
+two stages. A queue timeout alone does not change transport health; a timed-out
+backend write records the connection error and marks its still-active
+generation unhealthy. An old backend timeout cannot poison a replacement link.
 
 Do not allow a stuck ACK task or old write to hold the write lock indefinitely across reconnect.
+
+Capture the setup phase before an unexpected-disconnect callback resets it to
+`idle`. Setup-abort handling preserves that captured phase in the failed event.
 
 ## Request timeout
 

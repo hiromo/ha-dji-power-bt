@@ -138,9 +138,17 @@ A domain runtime shared by all DJI Power entries owns the connection-operation l
 
 - `_connect_lock` serializes connection setup/teardown per manager.
 - The domain connection-operation lock serializes controller-heavy connect/disconnect operations across DJI Power entries.
-- `_write_lock` serializes GATT writes per device and is covered by an outer write timeout.
-- Request/response matching uses `(connection_generation, sequence)` so a response from an old BLE generation cannot satisfy a request on a newer link.
+- `_write_lock` serializes GATT writes per device. Queue acquisition and backend
+  write completion each have a bounded timeout; queue congestion alone does not
+  mark the transport unhealthy.
+- Notification subscriptions are bound to a weak client reference and its
+  generation. Request/response matching additionally uses
+  `(connection_generation, sequence)`. Queued writes revalidate client identity
+  and generation after acquiring the lock.
 - Configuration-setting public methods use an operation lock so read-modify-write sequences do not race each other.
+- Matching settings are coalesced after validation. Optimistic values can
+  coalesce a duplicate only while their acknowledged transaction still awaits
+  verification; an expired unconfirmed value cannot suppress a retry forever.
 
 ## State publication
 

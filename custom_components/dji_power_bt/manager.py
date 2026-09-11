@@ -38,7 +38,8 @@ from .manager_constants import (
 from .manager_payload import ManagerPayloadMixin
 from .manager_transport import ManagerTransportMixin
 from .manager_types import (
-    DjiPowerAuthError, DjiPowerConnectionError, DjiPowerState, PendingVerification,
+    DjiPowerAuthError, DjiPowerConnectionError, DjiPowerState, GattTrafficStats,
+    PendingVerification,
 )
 from .manager_utils import classify_connection_exception as _classify_connection_exception
 from .manager_utils import utcnow_iso
@@ -120,6 +121,7 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         self._connection_operation_lock = connection_operation_lock
         self._domain_runtime = domain_runtime
         self._write_lock = asyncio.Lock()
+        self._gatt_traffic = GattTrafficStats()
         self._write_lock_acquired_monotonic: float | None = None
         self._write_lock_context: str | None = None
         self._operation_lock = asyncio.Lock()
@@ -127,6 +129,7 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         self._next_seq = 0x2711
         self._config_generation = 0
         self._last_config_report_monotonic: float | None = None
+        self._unconfirmed_config_writes: dict[int, str] = {}
         self._verification_revisions: dict[str, int] = {}
         self._pending_verifications: dict[str, PendingVerification] = {}
         self._verification_tasks: dict[str, asyncio.Task[None]] = {}
@@ -392,13 +395,20 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
 
             # A repeated automation call with an already matching target must not
             # generate another full 0x1018 transaction.
-            if not changed_fields:
+            if self._skip_unchanged_config_write(0x1018, not changed_fields):
                 return
 
             payload = build_0x63_payload_from_config(cfg, new_1018)
             verification_policy = (
                 OFF_PEAK_POWER_WRITE_VERIFICATION
                 if changed_fields == {"off_peak_charging_power"}
+                or (
+                    not changed_fields
+                    and off_peak_charging_power is not None
+                    and energy_optimization_mode is None
+                    and peak_discharging is None
+                    and off_peak_charging is None
+                )
                 else ACTIVE_WRITE_VERIFICATION
             )
             await self._send_0x63_and_apply(
@@ -433,6 +443,10 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
                 int(value_w),
                 step_w=self.off_peak_charging_power_step_w,
             )
+            if self._skip_unchanged_config_write(
+                0x1018, new_1018 == cfg.tlv_1018_value
+            ):
+                return
             payload = build_0x63_payload_from_config(cfg, new_1018)
             await self._send_0x63_and_apply(
                 payload,
@@ -454,6 +468,10 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             if cfg.tlv_1005_value is None:
                 raise HomeAssistantError("0x1005 TLV not available")
             new_1005 = update_0x1005_charge_limit(cfg.tlv_1005_value, int(value_percent))
+            if self._skip_unchanged_config_write(
+                0x1005, new_1005 == cfg.tlv_1005_value
+            ):
+                return
             payload = build_0x63_1005_payload_from_config(cfg, new_1005)
             await self._send_0x63_and_apply(
                 payload,
@@ -474,6 +492,10 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             if cfg.tlv_1005_value is None:
                 raise HomeAssistantError("0x1005 TLV not available")
             new_1005 = update_0x1005_discharge_limit(cfg.tlv_1005_value, int(value_percent))
+            if self._skip_unchanged_config_write(
+                0x1005, new_1005 == cfg.tlv_1005_value
+            ):
+                return
             payload = build_0x63_1005_payload_from_config(cfg, new_1005)
             await self._send_0x63_and_apply(
                 payload,
@@ -495,6 +517,10 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             if cfg.tlv_1018_value is None:
                 raise HomeAssistantError("0x1018 TLV not available")
             new_1018 = update_0x1018_off_peak_charge_enabled(cfg.tlv_1018_value, enabled)
+            if self._skip_unchanged_config_write(
+                0x1018, new_1018 == cfg.tlv_1018_value
+            ):
+                return
             payload = build_0x63_payload_from_config(cfg, new_1018)
             await self._send_0x63_and_apply(
                 payload,
@@ -516,6 +542,10 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             if cfg.tlv_1018_value is None:
                 raise HomeAssistantError("0x1018 TLV not available")
             new_1018 = update_0x1018_peak_discharge_enabled(cfg.tlv_1018_value, enabled)
+            if self._skip_unchanged_config_write(
+                0x1018, new_1018 == cfg.tlv_1018_value
+            ):
+                return
             payload = build_0x63_payload_from_config(cfg, new_1018)
             await self._send_0x63_and_apply(
                 payload,
@@ -545,6 +575,10 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
                 port_index=port_index,
                 enabled=enabled,
             )
+            if self._skip_unchanged_config_write(
+                0x100D, updated_states == cfg.output_interface_states
+            ):
+                return
             await self._send_0x63_and_apply(
                 payload,
                 expected_tlv=0x100D,
@@ -581,6 +615,10 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             new_1018 = update_0x1018_energy_optimization_mode(
                 cfg.tlv_1018_value, mode
             )
+            if self._skip_unchanged_config_write(
+                0x1018, new_1018 == cfg.tlv_1018_value
+            ):
+                return
             payload = build_0x63_payload_from_config(cfg, new_1018)
             await self._send_0x63_and_apply(
                 payload,
@@ -604,6 +642,10 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             payload, updated_modes = build_0x63_charging_mode_payload_from_config(
                 cfg, mode
             )
+            if self._skip_unchanged_config_write(
+                0x101E, updated_modes == cfg.charging_modes
+            ):
+                return
             await self._send_0x63_and_apply(
                 payload,
                 expected_tlv=0x101E,
@@ -650,10 +692,10 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
                 cfg = await self._read_current_config()
                 self._apply_config(cfg, source="0x60_tariff_prewrite", notify=False)
 
-            if (
-                cfg is not None
-                and tariff_schedule_signature(cfg.tariff_slots)
-                == tariff_schedule_signature(updated_slots)
+            if self._skip_unchanged_config_write(
+                0x1016,
+                cfg is not None and tariff_schedule_signature(cfg.tariff_slots)
+                == tariff_schedule_signature(updated_slots),
             ):
                 return
 
