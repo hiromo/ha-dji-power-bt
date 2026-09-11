@@ -1,70 +1,45 @@
 # Release history
 
-This document preserves the version-specific engineering record that was
-originally accumulated in the root README. It is historical, not a second copy
-of the current specification. In particular, the `grid_port` interpretation in
-v0.7.3 was superseded by the AC inlet/outlet model in v0.7.5.
-
-Current behavior is specified by the topical documents under `docs/`.
+This historical engineering record is not a current specification. Topical
+documents under `docs/` define current behavior; for example, v0.7.5 replaced
+v0.7.3's `grid_port` interpretation with AC inlet/outlet semantics.
 
 Current public release: integration `v0.7.32`. The public compatibility baseline
 remains config-entry version `1` from `v0.7.31`.
 
 ## v0.7.32
 
-- Audited a retained Power 2000 long-session failure and compared the runtime
-  connection, authentication, initial configuration, and telemetry paths with
-  `zuyan9/ha-dji-power-ble`. Authentication is equivalent for Power 2000 and
-  Power 1000 Mini; initial `0x60` configuration reads and `0x62` ACK behavior
-  differ and remain controlled comparison candidates.
-- Suppressed unchanged `0x63` setting writes across individual setters. An
-  acknowledged optimistic value may coalesce duplicate automation calls only
-  while verification remains pending; an expired unconfirmed value can be sent
-  again.
-- Split bounded write-queue waiting from the backend GATT operation. Queue
-  expiry fails the operation without declaring the connection unhealthy;
-  backend timeout still recovers the same active connection generation.
-- Bound notification ingress, delayed ACKs, and queued writes to the originating
-  client/generation so retired work cannot affect a replacement connection.
-- Preserved the actual setup failure phase when the backend disconnect callback
-  resets connection state during setup.
-- Removed the connector's deprecated, unused `ble_device_callback`. Normal
-  address resolution now checks current HA state once and then waits for an
-  advertisement event, retaining the one-shot cache fallback and the stricter
-  post-disconnect fresh-advertisement gate.
-- Added bounded, payload-free runtime diagnostics for command write attempts and
-  completions, queue/backend timeout splits and maxima, ACK scheduling depth,
-  coalesced writes, and stale-operation rejection.
-- Kept the legacy initial `0x60`, conditional `0x62` ACK, PASSIVE advertisement
-  waits, negotiated connection parameters, and notification watchdog unchanged
-  for this validation stage.
-- Added executable regression coverage for all changed setter and lifecycle
-  paths. The release suite contains 119 passing tests.
+- Audited the retained Power 2000 failure and compared connection,
+  authentication, configuration, and telemetry with `zuyan9/ha-dji-power-ble`.
+  Authentication matches; initial `0x60` and `0x62` ACK behavior differ.
+- Suppressed unchanged `0x63` writes while preserving optimistic-state
+  verification and retry of expired, unconfirmed values.
+- Separated queue and backend GATT deadlines; only a backend timeout recovers the
+  active connection.
+- Bound notifications, queued writes, and delayed ACKs to their client/generation
+  and retained the true setup failure phase.
+- Replaced normal address polling with an advertisement wait and removed the
+  deprecated callback, while preserving cache and fresh-advertisement safeguards.
+- Added bounded, payload-free traffic/contention diagnostics. Legacy `0x60`,
+  conditional `0x62` ACK, PASSIVE scanning, connection parameters, and watchdog
+  remain unchanged. All 119 tests passed.
+
+See the [incident evidence](implementation/ble-disconnect-investigation-2026-09-11.md)
+and [comparison/review](implementation/ble-comparison-and-review-2026-09-11.md).
 
 ## Public packaging and documentation preparation
 
-- Added root HACS metadata and automated HACS/Hassfest repository validation.
-- Moved public release notes to `CHANGELOG.md` and GitHub Releases while keeping
-  this file as the detailed pre-public engineering record.
-- Rewrote the root README as an English user guide and documented verified
-  Power 2000 Scheduled-period behavior, Bluetooth capacity, and pair-key
-  recovery/security boundaries.
-- Clarified that only a DJI Home Bluetooth connection conflicts with the
-  integration; DJI Home Wi-Fi and cloud access can remain active concurrently.
-- Licensed the project under Apache License 2.0, matching Home Assistant Core,
-  and documented that private development and field testing began in early June
-  2026.
+Added HACS metadata and HACS/Hassfest validation; moved public notes to
+`CHANGELOG.md` and GitHub Releases; rewrote the README as an English user guide;
+documented Power 2000 Scheduled behavior, Bluetooth capacity, pair-key security,
+and concurrent DJI Home Wi-Fi/cloud access; and adopted Apache License 2.0.
 
 ## Pre-public config-entry baseline reset
 
-- After the original v0.7.31 development snapshot and before general
-  publication, reset `ConfigFlow.VERSION` from 8 to 1 without changing the
-  current config-entry or entity unique IDs.
-- Removed the development-only `async_migrate_entry()` path for versions 2
-  through 8. Those version numbers and identifier changes remain documented
-  below only as pre-public engineering history.
-- Development Home Assistant installations with an old entry must delete and
-  recreate it; the public version 1 baseline does not downgrade or migrate it.
+Before publication, reset `ConfigFlow.VERSION` from 8 to 1 without changing
+current unique IDs and removed development-only migrations for versions 2-8.
+Old development entries require recreation; see
+[ADR 0007](decisions/0007-reset-public-config-entry-baseline.md).
 
 ## v0.7.31
 

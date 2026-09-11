@@ -1,61 +1,48 @@
 # DJI Power Bluetooth for Home Assistant
 
-DJI Power Bluetooth is a community-maintained custom integration that monitors
-and controls DJI Power stations over local Bluetooth Low Energy (BLE).
-
-> This is an unofficial community project. It is not affiliated with or
-> endorsed by DJI.
+DJI Power Bluetooth is an unofficial, community-maintained custom integration
+for monitoring and controlling DJI Power stations over local Bluetooth Low
+Energy (BLE). It is not affiliated with or endorsed by DJI.
 
 [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hiromo&repository=ha-dji-power-bt&category=integration)
 
 ## Supported devices
 
-The following models have been tested with real hardware:
+Real-hardware testing covers:
 
 - DJI Power 2000
 - DJI Power 1000 Mini
 
-DJI Power 1000 and DJI Power 1000 V2 can be discovered by their known model
-codes, but their model-specific configuration tables have not been fully
-validated. The integration therefore exposes a conservative subset of entities
-on those models. Unknown model codes receive the same conservative treatment.
+DJI Power 1000 and 1000 V2 are discoverable by known model codes but expose a
+conservative entity subset because their configuration tables are not fully
+validated. Unknown models use the same policy.
 
 Private development began in early June 2026. Power 2000 and Power 1000 Mini
-have since undergone sustained testing in real Home Assistant environments,
-including simultaneous multi-station connections, reconnect recovery,
-telemetry, and configuration writes.
+have since received sustained Home Assistant testing, including simultaneous
+connections, reconnects, telemetry, and configuration writes. The integration
+is beta-quality and intended for regular use with verified devices. Its
+reverse-engineered protocol and unverified models may require changes after DJI
+firmware updates.
 
-The integration is considered beta-quality and is intended for regular use
-with verified devices. Because the BLE protocol is reverse engineered, support
-for other models remains conservative, and future firmware changes may require
-updates to the integration.
+## Requirements and connection model
 
-## Requirements and Bluetooth connection model
-
-- Home Assistant with a local Bluetooth adapter or an ESPHome Bluetooth Proxy
-  close enough to the station.
-- One free BLE GATT connection slot per enabled DJI Power config entry.
+- Home Assistant with a nearby local Bluetooth adapter or ESPHome Bluetooth
+  Proxy.
+- At least one connection slot per enabled DJI Power config entry.
 - The station's 32-character hexadecimal local pair key.
 
-Each connected station with BLE enabled occupies one persistent BLE GATT
-connection and receives telemetry approximately once per second. Every
-realtime packet is received and parsed; Home Assistant state publication is
-throttled to five seconds by default and can be configured from 1 to 60
-seconds.
+Each enabled station uses one persistent BLE GATT connection and sends telemetry
+approximately once per second. Every realtime packet is parsed; Home Assistant
+publishes state every five seconds by default, configurable from 1 to 60 seconds.
+Simultaneous persistent connections to multiple DJI Power stations are verified,
+provided the adapter or proxy has one free GATT slot per station and enough
+capacity for its other BLE devices.
 
-A DJI Power station accepts only one BLE central connection at a time. This
-integration cannot connect while DJI Home already holds the Bluetooth
-connection to that same station. Disconnect DJI Home's Bluetooth session, or
-close the app if it is using Bluetooth, before starting setup or allowing Home
-Assistant to reconnect. DJI Home access over Wi-Fi or the DJI cloud does not
-occupy the station's BLE connection and can remain active while this integration
-is connected.
-
-Each station also consumes one connection slot on the local Bluetooth adapter
-or ESPHome Bluetooth Proxy. Make sure the adapter or proxy has enough capacity
-for DJI Power plus every other connected BLE device. Simultaneous persistent
-connections to multiple DJI Power stations have been verified with real
-hardware; each station still consumes its own GATT slot.
+A station accepts only one BLE central. DJI Home cannot hold a Bluetooth
+connection to the same station while this integration connects; end that
+Bluetooth session or close the app before setup or reconnect. DJI Home access
+over Wi-Fi or the DJI cloud does not occupy the station's BLE connection and may
+remain active.
 
 ## Installation
 
@@ -63,166 +50,106 @@ hardware; each station still consumes its own GATT slot.
 
 HACS must already be installed.
 
-1. Use the button above, or open HACS and select **Custom repositories** from
-   the top-right menu.
-2. Add `https://github.com/hiromo/ha-dji-power-bt` as an
-   **Integration**.
-3. Download **DJI Power Bluetooth**.
-4. Restart Home Assistant.
-5. Open **Settings -> Devices & services -> Add integration** and select
+1. Use the button above, or add
+   `https://github.com/hiromo/ha-dji-power-bt` to HACS **Custom repositories**
+   as an **Integration**.
+2. Download **DJI Power Bluetooth** and restart Home Assistant.
+3. Open **Settings -> Devices & services -> Add integration** and select
    **DJI Power Bluetooth**.
 
-Install future versions from the HACS update screen and restart Home Assistant
-after updating the integration.
+Install updates from HACS and restart Home Assistant afterward.
 
 ### Manual installation
 
-Copy this directory into the Home Assistant configuration directory:
+Copy the integration to `/config/custom_components/dji_power_bt/`, restart Home
+Assistant, then add **DJI Power Bluetooth** from **Settings -> Devices &
+services -> Add integration**.
 
-```text
-/config/custom_components/dji_power_bt/
-```
+## Initial setup and pair key
 
-Restart Home Assistant, then add **DJI Power Bluetooth** from
-**Settings -> Devices & services -> Add integration**.
+Setup lists unconfigured, connectable advertisements containing DJI manufacturer
+data (`0x08AA`) and derives the model automatically; no BLE address or model name
+is entered manually. Obtain the device's local pair key by:
 
-## Initial setup and pair-key acquisition
+1. Signing in to a DJI account through the unofficial DJI Home private API flow.
+2. Using an existing DJI member token.
+3. Entering a known 32-character hexadecimal pair key.
 
-The setup flow lists unconfigured, connectable advertisements containing DJI
-manufacturer data (`0x08AA`). It determines the model automatically; users do
-not type a BLE address or model name.
+Account and token lookup are setup conveniences and may break if DJI changes its
+private endpoints. Account email, password, CAPTCHA data, and member token are
+not stored. If setup reopens at the previous authentication form, enable
+**Change authentication method** and submit it to return to the method menu.
 
-The flow offers three ways to obtain the per-device local pair key:
+### Storage and recovery
 
-1. Sign in to a DJI account and retrieve it through the unofficial DJI Home
-   private API flow.
-2. Use an already acquired DJI member token.
-3. Enter a known 32-character hexadecimal pair key manually.
+The pair key is a secret. It is hidden from the GUI, diagnostics, logs, and
+protocol captures; authentication command `0x6A` is excluded from capture.
+Home Assistant stores the key as `data.local_auth_key` in the `dji_power_bt`
+entry under `/config/.storage/core.config_entries`. Administrators may inspect
+that file read-only to recover a known key; never edit `.storage` manually.
 
-The account and member-token methods exist for convenience during setup only.
-Normal operation is local BLE. DJI may change its private endpoints at any
-time, so these acquisition methods may stop working without notice. Account
-email, password, CAPTCHA data, and member token are not stored in the config
-entry.
+Protect the Home Assistant host and backups, and never paste the key into an
+issue, diagnostic bundle, screenshot, capture, or chat. An encrypted password
+manager or secret vault provides a recovery copy if DJI cloud lookup later stops
+working.
 
-If a setup form is reopened at the previously selected authentication method,
-enable **Change authentication method** and submit the form to return to the
-method menu.
-
-## Pair-key storage and security
-
-The pair key is a device authentication secret. The integration intentionally
-does not display it in the GUI, downloaded diagnostics, logs, or protocol
-captures. Authentication command `0x6A`, which carries the key, is excluded
-from the capture feature.
-
-Home Assistant must retain the key for future local authentication. It is
-stored as `data.local_auth_key` in the config entry for domain
-`dji_power_bt`. A Home Assistant administrator who needs to recover a
-known key can inspect `/config/.storage/core.config_entries` from the host and
-locate that config entry. Treat the file as read-only: do not edit Home
-Assistant `.storage` files manually.
-
-Displaying this field reveals the full key. Never paste it into an issue,
-diagnostic bundle, screenshot, public capture, or chat. Protect the Home
-Assistant host and backups because they contain the key. If cloud acquisition
-still works, storing the key separately in an encrypted password manager or
-secret vault can preserve a recovery path if DJI later changes the private API.
-
-As a last-resort recovery method for a station you own, the 32-character
-hexadecimal pair key can also be obtained by capturing and analyzing the BLE
-authentication exchange recorded in an Android Bluetooth HCI snoop log. This
-project began with that approach. Enable Bluetooth HCI snoop logging on Android,
-turn off both mobile data and Wi-Fi, leave only Bluetooth enabled, and then use
-DJI Home to connect to the DJI Power station while the exchange is being
-captured. The second command `0x6A` request in that exchange contains the 32
-ASCII hexadecimal key bytes.
-
-HCI snoop logs and full Android bug reports can contain authentication secrets,
-device identifiers, and unrelated nearby Bluetooth traffic. Keep them private,
-use this method only with devices and traffic you are authorized to inspect,
-and delete or encrypt the raw capture after recovering the key.
+For a station you own, a last-resort recovery method is capturing and analyzing
+the BLE authentication exchange in an Android Bluetooth HCI snoop log. Disable
+mobile data and Wi-Fi, leave Bluetooth enabled, and connect with DJI Home while
+recording; the second `0x6A` request contains the 32 ASCII hexadecimal key bytes.
+Bug reports and HCI logs can also contain device identifiers, unrelated nearby
+traffic, and other secrets. Inspect only authorized traffic, keep the files
+private, and encrypt or delete them after recovery.
 
 ## Main features
 
-- Battery state of charge, remaining time, battery temperature, firmware, and
-  total input/output telemetry.
-- AC inlet/outlet, USB, SDC, 12 V, and XT60 telemetry where supported and
-  reported by the device.
-- Charge and discharge limits.
-- AC output control and model-specific SDC control.
-- Power 2000 scheduled-energy controls and complete tariff-schedule writes.
+- Battery state of charge, remaining time, temperature, firmware, and total
+  input/output telemetry.
+- AC inlet/outlet, USB, SDC, 12 V, and XT60 telemetry when reported.
+- Charge/discharge limits, AC output, and model-specific SDC controls.
+- Power 2000 scheduled-energy and complete tariff-schedule controls.
 - Power 1000 Mini charging-mode selection.
-- Sanitized Home Assistant diagnostics and bounded protocol capture that
-  excludes authentication traffic.
+- Sanitized diagnostics and bounded protocol capture without authentication
+  traffic.
 
-Model capability and current device mode are checked separately. A control can
-remain unavailable even when the entity exists if the active mode does not
-support that operation.
+Capabilities and the current device mode are checked separately, so an existing
+entity may be unavailable when its operation is invalid in the active mode.
 
 ## Power 2000 energy management
 
 ### Supported Energy Saver mode
 
-The integration supports DJI Home's **Disabled** and **Scheduled periods**
-Energy Saver modes. Home Assistant exposes these as Energy optimization mode
-values `disabled` and `scheduled`.
-
-**Grid-Tied ESS is not supported.** The integration does not implement
-Grid-Tied ESS reads or writes and blocks Scheduled-oriented `0x1018` controls
-when the station reports an unknown or unsupported energy optimization mode.
-Use DJI Home to leave Grid-Tied ESS before controlling Scheduled settings from
-Home Assistant.
+DJI Home's **Disabled** and **Scheduled periods** modes appear as `disabled` and
+`scheduled`. **Grid-Tied ESS is not supported**: the integration neither reads
+nor writes it and blocks Scheduled-oriented `0x1018` controls for unknown or
+unsupported modes. Leave Grid-Tied ESS in DJI Home before using those controls.
 
 ### Verified Scheduled-period behavior
 
-The following behavior has been verified on Power 2000 hardware while Energy
-optimization mode is `scheduled`. It is station firmware behavior; Home
-Assistant configures the relevant values but does not emulate the power-flow
-logic.
+On verified Power 2000 firmware in `scheduled` mode:
 
-1. When `SoC <= Discharge limit + 5%`, the station forces bypass supply while
-   AC input is available. This protection rule takes priority over every rule
-   below.
-2. When **Off-peak charging** is off, the station does not charge its battery
-   from AC.
-3. **Off-peak charging power** acts as the maximum AC input power. During bypass,
-   if the connected load needs more power than this limit, the battery supplies
-   the shortfall, subject to the protection rule above.
-4. When **Tariff period** is `peak` and **Peak discharging** is on, Power 2000
-   stops AC input by itself. An external smart plug on the AC inlet is not
-   required. If SoC falls to `Discharge limit + 5%` or below, the station
-   automatically resumes AC input to preserve forced bypass supply.
+1. With AC available, `SoC <= Discharge limit + 5%` forces bypass supply and
+   overrides the following rules.
+2. Disabling **Off-peak charging** prevents battery charging from AC.
+3. **Off-peak charging power** limits total AC input; during bypass the battery
+   supplies load above that limit, subject to rule 1.
+4. During a `peak` **Tariff period**, enabling **Peak discharging** stops AC
+   input without an external smart plug. AC input resumes at the rule 1 limit.
 
-Firmware can change device behavior. Validate the resulting power flow on your
-own installation before using these controls for unattended high-power loads.
+Firmware may change this behavior. Validate power flow before unattended,
+high-power use.
 
-### All-day tariff preset buttons
+### Tariff schedule
 
-Power 2000 provides two configuration-category buttons:
+The **Set all-day off-peak tariff** and **Set all-day peak tariff** buttons call
+`dji_power_bt.set_tariff_schedule`. Both entities are disabled by default;
+enable them only when a dashboard button is useful. Automations should call the
+action directly. Either button completely replaces DJI Home's **Electricity
+price time period** table, including detailed schedules, with two everyday
+slots: `00:00-23:59` and `23:59-00:00`. The second covers the otherwise omitted
+23:59 minute.
 
-- **Set all-day off-peak tariff**
-- **Set all-day peak tariff**
-
-Both entities are disabled by default. They are convenience wrappers around
-`dji_power_bt.set_tariff_schedule`; enable one in the Home Assistant entity
-registry only when a manual dashboard button is useful. Automations should call
-the action directly.
-
-Pressing either button completely replaces the station's DJI Home
-**Electricity price time period** table with the selected all-day profile. It
-does not merge with an existing timetable. Any detailed weekday or time-of-day
-schedule previously created in DJI Home is overwritten.
-
-The preset writes two everyday slots (`00:00-23:59` and `23:59-00:00`) because
-the first range alone does not include the 23:59 minute on verified Power 2000
-firmware.
-
-### Tariff schedule action
-
-`dji_power_bt.set_tariff_schedule` is the action that Automations should call
-directly. It completely replaces the Power 2000 tariff table. Supply either an
-all-day `preset` or a complete `periods` list, never both. For example:
+The action accepts either an all-day `preset` or a complete `periods` list:
 
 ```yaml
 action: dji_power_bt.set_tariff_schedule
@@ -239,35 +166,26 @@ data:
       end_time: "23:59"
 ```
 
-Times have minute precision. A period ending earlier than it starts crosses
-midnight. Overlaps and equal start/end times are rejected, while uncovered
-times are allowed. Detailed period writes are based on the observed tariff
-record layout but have not yet been validated on real hardware; the two all-day
-presets have been validated on Power 2000.
+Times have minute precision. An end before its start crosses midnight; overlaps
+and equal endpoints are rejected, while gaps are allowed. Detailed period writes
+use an observed record layout and lack real-hardware validation; the all-day
+presets are verified on Power 2000.
 
 ### Combined scheduled-energy action
 
-`dji_power_bt.set_scheduled_energy_settings` is a Home Assistant action. It
-updates one or more of the following Power 2000 settings in one safe `0x1018`
-read-modify-write operation:
+`dji_power_bt.set_scheduled_energy_settings` changes one or more fields in one
+serialized `0x1018` read-modify-write operation:
 
 | Field | Value |
 |---|---|
 | `energy_optimization_mode` | `disabled` or `scheduled` |
 | `peak_discharging` | `true` or `false` |
 | `off_peak_charging` | `true` or `false` |
-| `off_peak_charging_power` | watts within the device-reported range |
+| `off_peak_charging_power` | device-reported watt range |
 
-At least one field is required. Unspecified fields retain their current
-device-reported bytes, and no BLE write is sent when all requested values
-already match.
-
-Use this service in automations instead of issuing several separate select,
-switch, and number actions. It applies related settings in a single serialized
-transaction, avoids unnecessary BLE traffic, and avoids exposing intermediate
-combinations of settings while an automation is running.
-
-Example:
+At least one field is required. Unspecified device bytes are preserved, and a
+request matching the current value sends no BLE write. This avoids separate
+entity calls and intermediate setting combinations.
 
 ```yaml
 action: dji_power_bt.set_scheduled_energy_settings
@@ -279,10 +197,8 @@ data:
   off_peak_charging_power: 800
 ```
 
-The tariff timetable is stored in separate `0x1016/0x1017` records and cannot
-be changed in the same transaction as
-`set_scheduled_energy_settings` (`0x1018`). To set an all-day tariff and the
-scheduled-energy fields, call the two actions sequentially:
+Tariffs use separate `0x1016/0x1017` records, so call the tariff and scheduled
+actions sequentially when changing both:
 
 ```yaml
 - action: dji_power_bt.set_tariff_schedule
@@ -301,86 +217,59 @@ scheduled-energy fields, call the two actions sequentially:
 
 ## Power 1000 Mini charging mode
 
-Power 1000 Mini exposes a **Charging mode** select based on the mode table
-reported by the station. Verified options are `slow` (nominal 500 W) and `fast`
-(nominal 1,000 W). The integration preserves the complete reported table when
-changing the selected mode.
+The station-reported **Charging mode** table supplies `slow` (nominal 500 W) and
+`fast` (nominal 1,000 W) on verified hardware. Changing the selected mode
+preserves the complete table.
 
 ## Bluetooth troubleshooting
 
-### No device appears during setup
+### Device missing during setup
 
-The setup list intentionally requires a connectable advertisement containing
-DJI manufacturer data with company ID `0x08AA`. A station can temporarily emit
-a name-only advertisement without manufacturer data; that packet is not enough
-for safe model detection and is not listed.
+Discovery requires a connectable advertisement with `0x08AA` manufacturer data;
+a temporary name-only advertisement cannot identify the model. Ensure DJI Home
+does not hold Bluetooth, keep the station near the adapter/proxy, wait 3-5
+minutes for another advertisement, and retry. DJI Home Wi-Fi/cloud use may
+continue.
 
-Make sure DJI Home is not holding a Bluetooth connection to the station, keep
-the station and adapter/proxy nearby, wait about 3–5 minutes for a later
-advertisement containing manufacturer data, and retry setup. In observed cases,
-the manufacturer-data advertisement appeared after waiting. DJI Home may remain
-in use over Wi-Fi or the DJI cloud; only avoid initiating a DJI Home Bluetooth
-connection to that station while Home Assistant is discovering or connecting.
-
-### Unstable connection or reconnect delay
+### Unstable connection or delayed reconnect
 
 After an unexpected disconnect, the integration waits five seconds, discards
-the pre-disconnect BLE device object, and requires a fresh connectable
-advertisement before reconnecting. Recoverable failures then use outer backoff
-delays of **10, 30, 60, 120, and 300 seconds**. A successful authenticated and
-initialized connection resets the backoff.
-
-This conservative schedule prevents rapid connection churn and stale-client
-reuse. A reconnect can therefore take several minutes after repeated failures.
-Check RF coverage, make sure DJI Home is not holding the station's Bluetooth
-connection, and confirm that the Bluetooth adapter or ESPHome proxy still has a
-free connection slot before assuming the integration has stopped retrying.
-DJI Home Wi-Fi and cloud access do not need to be disabled.
+the old BLE device object, and requires a fresh connectable advertisement.
+Recoverable failures then wait **10, 30, 60, 120, and 300 seconds**; a successful
+authenticated initialization resets that backoff. Check RF coverage, DJI Home
+Bluetooth use, and free adapter/proxy slots before assuming retries have stopped.
 
 ## Diagnostics and protocol capture
 
-Home Assistant diagnostics include connection phases, reconnect counters,
-failure categories, GATT lifecycle state, write verification, and safe protocol
-details. Identifiers are redacted where appropriate, and pair keys, member
-tokens, passwords, CAPTCHA data, and command `0x6A` payloads are excluded.
+Home Assistant diagnostics contain connection phases, reconnect and failure
+counters, GATT lifecycle state, write verification, and safe protocol metadata.
+Identifiers are redacted where appropriate; pair keys, member tokens, passwords,
+CAPTCHA data, and `0x6A` payloads are excluded.
 
-The disabled-by-default **Capture protocol payloads** diagnostic button records
-a bounded in-memory sample. The
-`dji_power_bt.start_protocol_capture` action provides explicit duration
-and frame-count limits. Captures are exposed only through Home Assistant
-diagnostics and are not continuously written to disk.
+The disabled-by-default **Capture protocol payloads** button records a bounded
+in-memory sample. `dji_power_bt.start_protocol_capture` adds explicit duration
+and frame limits. Captures are available only through diagnostics and are not
+continuously written to disk.
 
 ## Known limitations
 
-- Grid-Tied ESS is unsupported.
-- DJI account and member-token setup depend on private DJI endpoints and may
-  stop working after a DJI-side change.
-- Power 1000 and Power 1000 V2 have not received the same model-specific
-  hardware validation as Power 2000 and Power 1000 Mini.
-- Unknown or incomplete nested configuration tables are read conservatively;
-  writes are refused rather than risking deletion of unknown records.
-- A station whose BLE connection is currently occupied by DJI Home is
-  unavailable to this integration. DJI Home Wi-Fi and cloud connections can
-  remain active concurrently.
-- Pair keys are stored in Home Assistant config entries, so the host and backups
-  must be protected.
+- Grid-Tied ESS remains unsupported.
+- Private DJI account/token endpoints may change.
+- Power 1000, Power 1000 V2, and unknown models use conservative support.
+- Incomplete nested configuration tables are not written.
+- DJI Home Bluetooth and this integration cannot share one station connection.
+- Pair keys in config entries require protected hosts and backups.
 
-## License
+## License and documentation
 
-DJI Power Bluetooth is licensed under the
-[Apache License 2.0](LICENSE), the same license used by Home Assistant Core.
-DJI names and product marks remain the property of their respective owners; the
-license does not grant trademark rights.
-
-Copyright 2026 hiromo and contributors.
-
-## Documentation and release history
+[Apache License 2.0](LICENSE), matching Home Assistant Core. DJI names and marks
+belong to their owners; the license grants no trademark rights. Copyright 2026
+hiromo and contributors.
 
 - [Public changelog](CHANGELOG.md)
 - [GitHub Releases](https://github.com/hiromo/ha-dji-power-bt/releases)
 - [Engineering documentation](docs/README.md)
 - [Detailed development history](docs/release-history.md)
 
-Current engineering behavior is documented by topic under `docs/`. Historical
-release notes describe superseded behavior and are not a second current
-specification.
+Topical documents define current behavior; release history records superseded
+implementation details.

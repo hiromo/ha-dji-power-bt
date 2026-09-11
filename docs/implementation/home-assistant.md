@@ -2,80 +2,49 @@
 
 ## Config entry
 
-`DjiPowerConfigFlow.VERSION = 1` is the first public compatibility baseline.
+`dji_power_bt` and `DjiPowerConfigFlow.VERSION = 1` begin the public compatibility
+contract. Pre-public domains and versions are unsupported migration sources; see
+[ADR 0007](../decisions/0007-reset-public-config-entry-baseline.md). Config-entry
+fields/version and entity unique IDs are compatibility surfaces, so incompatible
+changes require an explicit migration and release-contract coverage. Entity
+unique IDs use the normalized BLE address plus entity key and are independent of
+the config-entry version.
 
-The first public integration domain is `dji_power_bt`, matching the
-`custom_components/dji_power_bt` directory and `manifest.json`. The pre-public
-`dji_power` and `dji_power_bluetooth` domains are retired and have no in-place
-migration. Home Assistant treats each domain as a different integration, so a
-development installation must remove the old entry and register the device
-again.
+Stored runtime data includes the normalized BLE address, model/code, device name,
+local pair key, and optional serial number. Setup-only account credentials and
+member tokens are not persisted.
 
-Pre-public config-entry versions `2` through `8` and their migration handler were
-retired before publication. They are development history, not supported upgrade
-sources. An existing development installation with one of those entries must
-remove and recreate the DJI Power Bluetooth config entry.
+The pair key is excluded from GUI surfaces and diagnostics. Administrators may
+inspect the matching entry's `data.local_auth_key` in
+`/config/.storage/core.config_entries` for read-only recovery; never edit
+`.storage`. See [authentication](../protocol/authentication.md) for the complete
+secret boundary.
 
-The config-entry version is independent of both the config entry's Bluetooth
-address unique ID and entity unique IDs. Current entity unique IDs continue to
-use the normalized BLE address plus the current entity key.
+The user step derives model codes from Home Assistant discovery advertisements
+with DJI manufacturer data (`0x08AA`); users do not type addresses or models.
+Authentication accepts DJI account lookup, member-token lookup, or a known
+32-character hexadecimal pair key.
 
-After the first public release, treat config-entry fields, the config-entry
-version, and entity unique IDs as compatibility surfaces. Any later incompatible
-change requires an explicit migration and release-contract coverage.
+Home Assistant retains a Bluetooth-discovery flow at its current server-side
+step. Closing the dialog does not abort it, so reopening can show the last form;
+this is flow state, not a stored device preference.
 
-Stored runtime-critical data includes the normalized device BLE address, model/model code, device name, local pair key, and optional serial number. Setup-only account credentials/member tokens are not persisted.
-
-The pair key is intentionally absent from GUI surfaces and exported diagnostics.
-An administrator can recover a known stored key by inspecting the matching
-`dji_power_bt` entry's `data.local_auth_key` field in
-`/config/.storage/core.config_entries`. This is a read-only recovery procedure;
-users must not edit `.storage` files manually. See
-`docs/protocol/authentication.md` for the full secret-handling boundary.
-
-The normal user step lists candidates from Home Assistant Bluetooth discovery
-using DJI manufacturer data (`0x08AA`) and derives the model code from the
-advertisement; it does not ask for a manually typed BLE address or model name.
-Authentication setup then offers DJI account lookup, existing member-token
-lookup, or direct entry of a known 32-character hexadecimal pair key.
-
-Home Assistant keeps a Bluetooth-discovery config flow on the server at its
-current step. Reopening that discovery opens the existing flow ID, and closing
-the frontend dialog does not invoke an integration callback that could reset or
-abort it. The last authentication form can therefore reappear after the dialog
-is closed; this is config-flow state, not a per-device preference or config-entry
-data.
-
-Every setup form after the authentication-method menu provides a
-`change_auth_method` checkbox. Submitting a form with this checkbox enabled
-clears setup-only cloud credentials and returns the same flow to the
-authentication-method menu. Credential fields are validated by the flow rather
-than by frontend-required markers so this return action can be submitted without
-entering credentials. The integration cannot automatically detect the dialog's
-close button, so merely closing and reopening still resumes the current form;
-the explicit return action is the supported recovery path.
+Every later setup form provides `change_auth_method`. Submitting it clears
+setup-only cloud credentials and returns to the method menu without requiring
+credential fields. Because the integration cannot detect dialog closure, this
+explicit action is the supported reset path.
 
 ### Resetting a pre-public development installation
 
-Before replacing version 8 code with the public version 1 baseline:
-
-1. Create a Home Assistant backup.
-2. Confirm that the device can be registered again using a known local pair key,
-   DJI account lookup, or an existing member token.
-3. In **Settings -> Devices & services -> DJI Power Bluetooth**, delete each
-   development config entry while the old integration is still installed.
-4. Remove `/config/custom_components/dji_power` and
-   `/config/custom_components/dji_power_bluetooth`, install the version 1 files
-   as `/config/custom_components/dji_power_bt`, and restart Home Assistant.
-5. Add each DJI Power device again through Bluetooth discovery and verify entity
-   IDs used by dashboards and automations.
-
-Do not edit `.storage/core.config_entries` to force the stored version from `8`
-to `1` or its domain from `dji_power` or `dji_power_bluetooth` to
-`dji_power_bt`. Do not leave retired and current component directories
-installed together. If the new integration was installed before the old entry
-was removed, restore the previous integration files if necessary, restart,
-remove the old entry through the UI, then reinstall the new domain.
+Back up Home Assistant and confirm a pair key, DJI account, or member token can
+register the device again. While the old integration is installed, delete its
+entries in the UI; remove `/config/custom_components/dji_power` and
+`/config/custom_components/dji_power_bluetooth`; install `dji_power_bt`;
+restart; then re-register and verify dashboard/automation entity references. If
+the new code was installed first, restore the old code long enough to remove its
+entries through the UI. Never force a domain/version change in `.storage` or
+install old and current directories together. See
+[ADR 0007](../decisions/0007-reset-public-config-entry-baseline.md).
 
 ## Platforms
 

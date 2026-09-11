@@ -1,24 +1,16 @@
 # BLE implementation comparison and proposed-change review: 2026-09-11
 
-This follows the [diagnostic investigation](ble-disconnect-investigation-2026-09-11.md).
-Baseline: local `46bce57`, integration `0.7.31`. Comparison source:
-`zuyan9/ha-dji-power-ble` at
-`4682acbef33bfb9b4734818cc640f59dbd7c2758`. That public repository was inspected
-in a temporary checkout. No hardware or HA instance was operated.
+This follows the [incident investigation](ble-disconnect-investigation-2026-09-11.md)
+and compares local baseline `46bce57` (`0.7.31`) with
+`zuyan9/ha-dji-power-ble@4682acbef33bfb9b4734818cc640f59dbd7c2758` in a
+temporary checkout. No hardware or HA instance was operated.
 
-The operator additionally reports that earlier HA-side interventions never
-resolved comparable faults, whereas the present recovery followed successful
-DJI Home Bluetooth use. HA BLE was disabled first; DJI Home displayed all
-information normally for about one minute. This strengthens the priority of
-investigating a station-side state change caused by the official app. It does
-not identify the responsible packet or exclude Android's different link
-negotiation/teardown. The tentative app time is not reliable enough to align it
-with one exact diagnostic event.
-
-The pasted AI review is a list of claims to check, not evidence of actual
-traffic counts or proof of the failure's origin. In particular, references to
-past mainboard/inverter errors in that text were not independently verified by
-this investigation.
+Earlier HA-side actions reportedly did not clear similar faults. Here, with HA
+BLE disabled, DJI Home displayed all data for about one minute before HA later
+recovered. This prioritizes an official-app station-state effect without
+identifying a packet or excluding Android link negotiation/teardown; the app
+time cannot be matched to one diagnostic event. The pasted AI review supplied
+claims, not measured traffic or verified mainboard/inverter errors.
 
 ## Communication comparison for Power 2000 and Power 1000 Mini
 
@@ -40,37 +32,31 @@ Sources: [device implementation](https://github.com/zuyan9/ha-dji-power-ble/blob
 [coordinator](https://github.com/zuyan9/ha-dji-power-ble/blob/4682acbef33bfb9b4734818cc640f59dbd7c2758/custom_components/dji_power_ble/coordinator.py),
 [entry setup](https://github.com/zuyan9/ha-dji-power-ble/blob/4682acbef33bfb9b4734818cc640f59dbd7c2758/custom_components/dji_power_ble/__init__.py).
 
-**Confirmed by synthetic execution:** both real authentication/request builders
-produce identical authentication frames after normalizing sequence numbers,
-using synthetic credentials. No authentication payload was exported. A fake
-GATT backend fragmented replies into seven-byte notifications. Initial GET
-payload/frame lengths were respectively `48/61` versus `3/16, 3/16`. Feeding
-the same valid `0x62/0x40` notification generated one ACK here and zero there.
-This proves the code-level difference, not real-device compatibility or repair.
+**Synthetic confirmation:** with normalized sequences and synthetic credentials,
+both builders produced identical authentication frames. A fake GATT backend used
+seven-byte notification fragments. Initial GET payload/frame lengths were
+`48/61` here and `3/16, 3/16` there; one valid `0x62/0x40` produced one ACK here
+and none there. This establishes code differences, not hardware compatibility or
+repair, and exported no authentication payload.
 
-The GET difference is the first initialization comparison worth pursuing:
-retained failures repeatedly authenticate and then disconnect during initial
-configuration. Request *content/grammar* matters, not just length. Authentication
-already sends a 51-byte frame successfully in both implementations, so a simple
-"every write over 20 bytes fails" theory does not fit these logs. Actual MTU,
-backend long-write behavior, and station processing still require measurement.
-The legacy GET's field boundaries also need validation; see
+The GET difference is the first initialization comparison candidate because the
+retained failures follow authentication during initial configuration. Content
+matters: both implementations already send a 51-byte authentication frame, so
+the logs contradict a generic failure above 20 bytes. MTU, long-write behavior,
+station processing, and the legacy GET's field boundaries remain unmeasured; see
 [unknowns](../protocol/unknowns.md#configuration-get-grammar-and-recovery).
 
-There is no extra magic reset, session-finalization, periodic keepalive, or
-report-subscription command in the inspected comparison runtime. Neither does
-it prove that the official app has no such exchange. The comparison's original
-Power 1000 encrypted transport path is model-specific and is not used for
-Power 2000/Mini.
+The comparison has no extra reset, session-finalization, keepalive, or report
+subscription command; DJI Home may still have one. Its original Power 1000
+encrypted transport is model-specific and unused for Power 2000/Mini.
 
-External field evidence is limited but relevant: [Mini issue #4](https://github.com/zuyan9/ha-dji-power-ble/issues/4)
+Limited external evidence in [Mini issue #4](https://github.com/zuyan9/ha-dji-power-ble/issues/4)
 reports about ten reconnects over two days, successful report/configuration
-reception, and recovery after app use. Those tests used a standalone macOS
-CoreBluetooth bridge, not the HA ESPHome runtime. The pinned
+reception, and recovery after app use on a standalone macOS CoreBluetooth bridge,
+not HA ESPHome. The pinned
 [README](https://github.com/zuyan9/ha-dji-power-ble/blob/4682acbef33bfb9b4734818cc640f59dbd7c2758/README.md)
-still labels Power 2000 as requiring model-specific testing. This is useful
-support for a protocol comparison, not an equivalent long-duration reliability
-benchmark for the failing installation.
+still requires Power 2000-specific testing, so this supports protocol comparison
+rather than equivalent long-duration reliability.
 
 ## Review decisions and implementation
 
@@ -92,25 +78,21 @@ Relevant primary dependency sources:
 [connector 4.7.0](https://github.com/Bluetooth-Devices/bleak-retry-connector/blob/v4.7.0/src/bleak_retry_connector/__init__.py),
 [connector usage](https://bleak-retry-connector.readthedocs.io/en/latest/usage.html),
 [HA 2026.9.1 Bluetooth API](https://github.com/home-assistant/core/blob/2026.9.1/homeassistant/components/bluetooth/api.py).
-`async_process_advertisements()` unregisters its callback through `ExitStack`
-on success, timeout, or cancellation. ACTIVE mode also creates an active-scan
-request. These are HA scanning semantics, not DJI recovery protocol knowledge.
+`async_process_advertisements()` unregisters through `ExitStack` on success,
+timeout, or cancellation; ACTIVE also requests active scanning. These are HA
+scan semantics, not DJI recovery knowledge.
 
 ## Causality and next comparison
 
-The pasted estimates are conditional arithmetic: ten-second ACKs give 8,640
-writes/day; fifteen-second SETs give 5,760/day. They are not measured totals in
-the supplied files. The retained last setting ACK was over an hour before the
-telemetry gap. Mini does not use the Power 2000 off-peak setting, so that setter
-cannot be a universal explanation. Shared authentication, GET, push/ACK handling,
-and link parameter behavior remain pertinent to both models.
+The pasted 8,640 ACK/day and 5,760 SET/day estimates are conditional arithmetic,
+not measurements. The last retained setting ACK preceded the telemetry gap by
+over an hour, and Mini lacks the Power 2000 off-peak setting. Shared
+authentication, GET, push/ACK, and link parameters remain relevant.
 
-The station-side cumulative-load hypothesis remains open. Neither small Python
-memory usage nor successful proxy cleanup tests it. Conversely, a successful
-official-app session does not by itself identify whether recovery came from a
-GET, another command, a clean session boundary, or negotiated link parameters.
-Previous failed HA interventions make an app-specific effect a higher-priority
-field hypothesis; they do not establish a packet's identity.
+The station-side cumulative-load hypothesis remains open: Python memory and proxy
+cleanup do not test it. DJI Home success cannot distinguish a GET, another
+command, a clean boundary, or link parameters. Earlier failed HA interventions
+raise the priority of an app-specific effect without identifying its packet.
 
 **Operator decision, 2026-09-11:** option 1 was explicitly selected: preserve
 current communication contents and validate the implemented robustness changes
@@ -120,29 +102,21 @@ advertisement waits, and watchdog threshold. The implemented suppression of
 redundant setting writes remains part of this validation. No experimental GET,
 ACK-suppression, or connection-interval mode is included in this stage.
 
-After evaluating that evidence, if a separate experimental mode is authorized,
-begin with only initial GET selection: legacy request versus the
-two exact comparison requests, default unchanged. Compare healthy and failed
-station states and both firmware/model variants. Keep ACK policy and connection
-parameters fixed. Separately capture whether DJI Home ACKs `0x62`, and compare
-link negotiation and disconnect behavior. Exclude credentials/authentication
-payloads from exported evidence. Do not replay unknown setting writes to test
-a session-reset theory.
+If later evidence justifies an experimental mode, vary only the initial GET:
+legacy versus the two exact comparison requests, default unchanged. Compare
+healthy/failed states and both models/firmwares while fixing ACK and connection
+parameters. Separately compare DJI Home's `0x62` ACK, link negotiation, and
+disconnect. Exclude credentials/authentication payloads and do not replay unknown
+setting writes.
 
 ## Validation
 
-New tests execute setters, cache refresh, expired verification retry, failed
-ACK handling, incomplete-table rejection, queued-write timeout/cancellation,
-old-generation writes/ACKs, actual notification subscription setup, a disconnect
-during initial configuration, event resolution, and cancellation propagation.
-No source-text-only tests substitute for these lifecycle behaviors.
+Nineteen new executable regressions cover setters, cache/verification behavior,
+ACK failure, incomplete tables, write timeout/cancellation, old generations,
+notification setup, initial-config disconnect, event resolution, and cancellation.
+The full **119-test** suite, `compileall`, and `git diff --check` passed. An obsolete
+source-text assertion for the unused callback was removed while executable cache
+and fresh-advertisement tests remain.
 
-Validation: **119 tests passed**, including 19 new executable regressions.
-`python -X utf8 -m compileall -q custom_components tests` and `git diff --check`
-passed. Pytest used an isolated cached environment with its cache provider
-disabled. One obsolete release-test assertion referenced an error string inside
-the never-called connector callback; it was removed while preserving the
-executable fresh-advertisement and cache-rejection tests.
-
-These tests use simulated clients and HA dependency stubs. No real-device or
-elapsed-days validation is claimed, and no release/deployment has been performed.
+Tests use simulated clients and HA dependency stubs; no real-device or elapsed-
+days validation is claimed. The resulting changes were released as `v0.7.32`.

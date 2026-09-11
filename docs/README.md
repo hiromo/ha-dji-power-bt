@@ -33,12 +33,15 @@ only when the reason for an older migration or compatibility rule matters.
 - [`decisions/README.md`](decisions/README.md): accepted architecture decisions
   that should not be undone without new evidence.
 
-## Historical record
+## History and incident evidence
 
 - [`release-history.md`](release-history.md): version-by-version technical changes
   formerly kept in the root README.
+- [`implementation/ble-disconnect-investigation-2026-09-11.md`](implementation/ble-disconnect-investigation-2026-09-11.md):
+  retained incident timeline, evidence, and hypotheses.
+- [`implementation/ble-comparison-and-review-2026-09-11.md`](implementation/ble-comparison-and-review-2026-09-11.md):
+  comparison, decisions, and validation for version 0.7.32.
 
-The historical record can describe behavior that was later replaced. When it
-conflicts with a topical current-design document, the topical document and the
-current implementation are authoritative; investigate and update both if they
-disagree.
+Open incident records only when that evidence is relevant. History may describe
+replaced behavior; topical documents and current code are authoritative. If they
+disagree, investigate and update both.
