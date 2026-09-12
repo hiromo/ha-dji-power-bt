@@ -142,14 +142,43 @@ high-power use.
 ### Tariff schedule
 
 The **Set all-day off-peak tariff** and **Set all-day peak tariff** buttons call
-`dji_power_bt.set_tariff_schedule`. Both entities are disabled by default;
+the Home Assistant action `dji_power_bt.set_tariff_schedule`.
+Both entities are disabled by default;
 enable them only when a dashboard button is useful. Automations should call the
 action directly. Either button completely replaces DJI Home's **Electricity
 price time period** table, including detailed schedules, with two everyday
 slots: `00:00-23:59` and `23:59-00:00`. The second covers the otherwise omitted
 23:59 minute.
 
-The action accepts either an all-day `preset` or a complete `periods` list:
+The action requires `device_id` and exactly one of `preset` or `periods`.
+Either input replaces the complete tariff table; it is not merged with the
+current schedule.
+
+| Field | Value |
+|---|---|
+| `device_id` | Home Assistant device ID of the target Power 2000 (required) |
+| `preset` | `all_day_peak` or `all_day_off_peak`, applying the selected tariff all day, every day |
+| `periods` | A complete list of 1–64 tariff periods, each containing the required fields below |
+
+Each entry in `periods` requires:
+
+| Field | Value |
+|---|---|
+| `tariff` | `peak` or `off_peak` |
+| `weekdays` | A non-empty list of distinct start days: `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, `sun` |
+| `start_time` | Start time as a quoted `"HH:MM"` string, from `"00:00"` to `"23:59"` |
+| `end_time` | Exclusive end time in the same format |
+
+All-day peak preset example:
+
+```yaml
+action: dji_power_bt.set_tariff_schedule
+data:
+  device_id: <Power 2000 device ID>
+  preset: all_day_peak
+```
+
+Detailed periods example:
 
 ```yaml
 action: dji_power_bt.set_tariff_schedule
@@ -167,9 +196,7 @@ data:
 ```
 
 Times have minute precision. An end before its start crosses midnight; overlaps
-and equal endpoints are rejected, while gaps are allowed. Detailed period writes
-use an observed record layout and lack real-hardware validation; the all-day
-presets are verified on Power 2000.
+and equal endpoints are rejected, while gaps are allowed.
 
 ### Combined scheduled-energy action
 
