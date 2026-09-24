@@ -12,11 +12,10 @@ The project is reverse engineered and has accumulated important distinctions bet
 
 Repository Markdown under `AGENTS.md` and `docs/` is the persistent engineering memory.
 
-- `AGENTS.md` routes agents to focused documents.
+- All agents, including Claude Code, read `AGENTS.md` directly as the canonical instruction file, which routes them to focused documents.
 - Detailed protocol knowledge lives under `docs/protocol/`.
 - Implementation constraints live under `docs/implementation/`.
 - Non-obvious architectural choices live under `docs/decisions/`.
-- `CLAUDE.md` points to `AGENTS.md` instead of duplicating instructions.
 
 Do not use bulk imports from `AGENTS.md`; agents should read only task-relevant documents.
 
