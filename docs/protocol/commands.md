@@ -62,6 +62,13 @@ See `telemetry.md`.
 
 `0x62` is parsed using the same configuration parser as `0x60`. It is the preferred passive source for confirming recent writes.
 
+**Observed (Power 2000 with one expansion battery, 2026-09-26):** the latest
+0x62 contains a `0x1001` table with one `0x100F` record absent from the latest
+0x60 reply in that diagnostic. Accessory battery fields are **Inferred** from
+this record; see [layout and limitations](packet-format.md#power-2000-accessory-table-0x1001--0x100f).
+They are not currently exposed by the configuration parser. This difference
+does not establish command-exclusive availability or a writable table.
+
 When an unsolicited frame has:
 
 ```text

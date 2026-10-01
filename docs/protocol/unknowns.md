@@ -23,6 +23,12 @@ Power 2000      13 01 01
 Power 1000 Mini 10 01 01
 ```
 
+**Observed additional sample (2026-09-26):** Power 2000 with one expansion
+battery reports `13 01 02`, still on station firmware `01.00.1500`.
+This weakens an exclusively model-static interpretation of the whole tuple.
+**Hypothesis:** byte 6 may reflect attached modules or configuration; a
+same-station detach/reattach comparison is needed before calling it a count.
+
 These bytes differ by model while the last two bytes currently match. They may describe a product/platform family, hardware revision, application schema generation, or related metadata.
 
 Do not call them a protocol version yet.
@@ -176,7 +182,8 @@ case exists.
 Recommended discriminating captures:
 
 1. ordinary off-peak or manually initiated AC charging without the banner;
-2. periodic full-charge maintenance with the banner;
+2. periodic full-charge maintenance with the banner (one sample now recorded
+   below; synchronized start/end transitions are still needed);
 3. ultralow-SoC recovery below and above `discharge limit + 5%`;
 4. one-second 0x61 snapshots immediately before and after the banner clears,
    ideally while holding power direction constant;
@@ -186,6 +193,62 @@ Recommended discriminating captures:
 Do not expose these bytes as a charging, protective-charge, or Energy Saver
 entity until at least one such comparison separates the currently coupled
 states.
+
+### Maintenance-charge candidate `0x3050[6] = 0x05`
+
+**Observed (2026-09-26):** the operator-provided Power 2000 maintenance-charge
+diagnostic reports `0x3050 = 02 01 02 02 00 00 05`, `0x3020[4] = 1`, 70% SoC,
+and 1,500 W AC input. Nearby DJI Home imagery explicitly says maintenance
+charging to 100%. The latest 0x66 is empty; its retained history contains only
+one nonempty ID, `0x28000023`, before a reception gap. No new maintenance HMS
+ID was found. See the [analysis and appendable code catalog](hms-codes.md).
+
+**Hypothesis:** offset 6 value `05` represents a maintenance-charge state or
+reason, distinct from the earlier low-SoC protective-charge value `02`.
+The enum/bitfield interpretation, accessory influence, and transition timing
+remain **Unknown**. The current `0x3010` also differs from the earlier all-zero
+sample and contains identifier-like data, so the comparison is not controlled.
+Capture ordinary charging and maintenance start/end on the same configuration
+before assigning a semantic label or using this byte for availability/control.
+
+## Power 2000 station and expansion-battery fields
+
+The [single-accessory conclusions](telemetry.md#power-2000-with-one-power-expansion-battery-2000)
+distinguish combined SoC from the **Inferred** station-only
+`soc_duplicate_percent_candidate`. Accessory SN and firmware app-label
+correspondence is **Observed**; see the
+[0x100F layout](packet-format.md#power-2000-accessory-table-0x1001--0x100f).
+Cross-device field widths, capacity scaling, and behavior across updates
+still need comparative evidence.
+
+Remaining **Unknowns** and discriminating experiments:
+
+- Compare synchronized app readings and 0x61/0x62 fields while the two SoCs
+  diverge/change to verify station/accessory mappings and scaling. Retain only
+  non-identifying protocol conclusions in the repository.
+- Compare the same station with zero/one/multiple expansion batteries to
+  establish `0x3020[11]` count scope, `0x1000[6]`, 0x100F leading-byte meaning,
+  record repetition, ordering, and stable identity. A value of 1 with one
+  accessory does not alone prove an accessory count.
+- Retain before/after-update values for the now app-matched accessory firmware
+  `10.03.00.15`. Do not infer normal accessory power behavior
+  from this software-version-error sample.
+- Establish aggregate-SoC weighting/rounding and per-record update cadence;
+  equal nominal capacity and nonsynchronous screenshots do not prove a formula.
+- Determine whether accessory power appears in SDC records in other states;
+  absence of a leaf must not be interpreted as accessory disconnection.
+
+The existing diagnostic field names are retained for compatibility. These
+observations do not authorize new controls or writes to the accessory table.
+
+## HMS alarm 0x28000023: displayed meaning observed
+
+DJI Home explicitly identifies `28000023` as an SDC-connected accessory
+software-version error; the matching HMS ID is documented in
+[telemetry.md](telemetry.md#observed-hms-code-0x28000023).
+The displayed meaning is no longer unresolved. The exact version comparison,
+affected accessory range, severity, and clearance after a firmware update
+remain **Unknown**; a before/after-update capture is needed.
 
 ## HMS alarm 0x28000037
 

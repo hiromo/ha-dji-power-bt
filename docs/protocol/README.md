@@ -33,6 +33,9 @@ A field may be safe to parse diagnostically while remaining unsafe to use for co
 `telemetry.md`
 : Battery and power telemetry, interface/group semantics, HMS observations, and fast-path rules.
 
+`hms-codes.md`
+: Appendable HMS error-code catalog, separate charging-status candidates, and the 2026-09-26 maintenance-charge analysis.
+
 `model-differences.md`
 : Known model codes, static capability hints, device-reported feature signals, and behavior that must not be generalized across models.
 

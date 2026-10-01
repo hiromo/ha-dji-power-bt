@@ -37,6 +37,24 @@ Current profile:
 - AC output control
 - energy optimization control
 
+#### First single-expansion-battery observation (2026-09-26)
+
+**Observed:** Power 2000 firmware `01.00.1500` / communication firmware
+`03.03.0000`, with exactly one DJI Power Expansion Battery 2000 connected via
+SDC. DJI Home shows station and accessory capacities of 2048 Wh each, with
+separate SoC/temperature readings. HA's current SoC is combined, while its
+battery temperature is the station's. See the
+[telemetry conclusions](telemetry.md#power-2000-with-one-power-expansion-battery-2000).
+
+**Inferred:** 0x3020 offset 5 carries station-only SoC; a nested 0x100F record
+in 0x62's 0x1001 table carries accessory SoC/capacity/temperature/firmware.
+No SDC power leaf was present in the latest telemetry despite the physical
+connection. The exported `battery_unit_count` was 1 with two physical batteries,
+so its scope remains unresolved. This first sample was obtained while DJI Home
+reported accessory software-version error `28000023`; it does not establish
+normal behavior after upgrading the accessory, behavior with multiple expansion
+batteries, or equivalent layouts on other station models.
+
 ### Power 1000 Mini (`0x98`)
 
 Current profile:
@@ -210,6 +228,17 @@ This field experience is useful but does not rule out other triggers. Treat the
 10% release rule, periodicity, and association with the app banner as
 model/firmware-specific observations until reproduced with synchronized 0x61,
 0x66, power-flow, and app-state captures. See `unknowns.md`.
+
+### Maintenance-charge diagnostic (2026-09-26)
+
+**Observed:** on Power 2000 firmware `01.00.1500` / communication firmware
+`03.03.0000`, operator-identified maintenance charging at 70% SoC coincides
+with `0x3050[6] = 0x05` and `0x3020[4] = 1`. DJI Home explicitly displays
+maintenance charging to 100% in a nearby screenshot. The latest 0x66 is empty,
+and no maintenance-specific HMS ID is present in the retained history.
+**Hypothesis:** value `05` is a maintenance-charge state/reason; this single
+sample does not establish semantics across states, accessories, or models.
+See the [detailed evidence](hms-codes.md#2026-09-26-maintenance-charge-observation).
 
 ## Rule for new models
 

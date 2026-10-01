@@ -13,9 +13,9 @@ offset  size  interpretation
 0       2     SoC * 100 -> percent
 2       2     remaining time in minutes
 4       1     battery status code; semantic meaning not fully decoded
-5       4     duplicate SoC candidate * 100
-9       2     battery temperature * 100 -> degrees C
-11      1     battery unit count
+5       4     legacy duplicate SoC candidate * 100; station SoC inferred below
+9       2     battery temperature * 100 -> degrees C; station temperature observed below
+11      1     exported as battery unit count; count scope unresolved
 ```
 
 Raw `0x3010`, `0x3020`, and `0x3050` values are retained in diagnostics for high-temperature/charging-inhibit investigation. Do not expose a `charging_allowed` or `inhibit_reason` semantic until the code is confirmed.
@@ -23,6 +23,26 @@ Raw `0x3010`, `0x3020`, and `0x3050` values are retained in diagnostics for high
 The exported field names are `raw_0x3010_hex`, `raw_0x3020_hex`, and
 `raw_0x3050_hex`. They are also attributes of the disabled-by-default battery
 status diagnostic sensor.
+
+### Power 2000 with one Power Expansion Battery 2000
+
+- **Observed:** with one expansion battery connected via SDC, HA SoC reports
+  the combined percentage, while battery temperature reports the station's
+  temperature (`0x3020[0:2]` and `[9:11]`, respectively).
+- **Inferred:** `0x3020[5:9]`, currently named
+  `soc_duplicate_percent_candidate`, is station-only SoC, not a duplicate.
+- **Observed:** `0x62` contains an accessory table `0x1001 -> 0x100F`.
+  Accessory serial-number and firmware fields match the app's labels;
+  SoC, capacity, and temperature interpretations remain **Inferred**.
+  See the [field layout](packet-format.md#power-2000-accessory-table-0x1001--0x100f).
+- **Unknown:** aggregate-SoC calculation and `battery_unit_count` scope.
+  A value of 1 with two physical batteries does not establish a total count.
+  Missing SDC power records do not establish accessory disconnection or zero
+  energy transfer.
+
+These conclusions cover one hardware/firmware combination with accessory
+software-version error `28000023`; normal post-update behavior, multiple
+accessories, and other station models remain unverified.
 
 ### Power 2000 status-field correlations
 
@@ -121,6 +141,17 @@ XT60 input/output parsing is intentionally retained for interface type `8` and g
 
 ## 0x66 HMS/auxiliary reports
 
+The [HMS code catalog](hms-codes.md) collects known IDs in an appendable table
+with evidence labels and links. Its separate telemetry-status table must not
+be interpreted as additional HMS IDs.
+
+**Observed (2026-09-26):** a Power 2000 maintenance-charge diagnostic has an
+empty latest 0x66 body and only `0x28000023` in its nonempty retained history.
+The latest 0x61 `0x3050` is `02 01 02 02 00 00 05`, with battery status
+`0x3020[4] = 1`. **Hypothesis:** `0x3050[6] = 0x05` relates to maintenance
+charging; it is not a newly observed HMS error code. See the
+[dated evidence and reception gaps](hms-codes.md#2026-09-26-maintenance-charge-observation).
+
 The structural parser is provisional. It records alarm ID, sensor index, report level, and reserved bytes when the body matches the known record shape.
 
 An empty body is `00 00 00 00`.
@@ -130,6 +161,16 @@ An empty body is `00 00 00 00`.
 0x66 can arrive roughly once per second for long periods. The manager compares the timestamp-independent body bytes with the previous body. When unchanged it reuses the previous parsed record and increments `fast_path_hit_count`; a changed body triggers a full parse and increments `full_parse_count`.
 
 Do not optimize away body-transition detection or timestamp updates.
+
+### Observed HMS code 0x28000023
+
+**Observed:** DJI Home code `28000023` means a software-version error of an
+accessory connected to the SDC port. It corresponds to hexadecimal HMS ID
+`0x28000023` (`23 00 00 28` as u32le), not decimal 28000023.
+The observed record has sensor index 3, report level 0, and reserved value 0.
+
+Exact incompatible versions, sensor-index meaning, severity, and clearance
+following a firmware update remain **Unknown**.
 
 ### Observed HMS code 0x28000037
 

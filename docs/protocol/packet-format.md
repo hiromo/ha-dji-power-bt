@@ -126,3 +126,49 @@ The semantics of alarm IDs, sensor indexes, and report levels remain reverse-eng
 - bytes `[24:40]`: communication-module firmware ASCII, NUL terminated.
 
 Other fields in this record are intentionally not assigned production semantics yet. Several are strong product/revision/capability candidates; see `unknowns.md`.
+
+## Power 2000 accessory table 0x1001 / 0x100F
+
+**Observed structure and app-matched identity fields; other field meanings
+Inferred from one accessory capture.**
+The [Single-accessory conclusions](telemetry.md#power-2000-with-one-power-expansion-battery-2000)
+has the following complete nested table in the latest 0x62 report:
+
+```text
+01 10 37 00       outer ID 0x1001, length 55
+0f 10 33 00       nested ID 0x100F, length 51
+```
+
+Offsets below are decimal, zero-based, relative to the 51-byte `0x100F`
+value, excluding both TLV headers. Only non-identifying bytes are reproduced;
+the original bytes `[15:31]` contain the accessory serial-number ASCII field and are
+deliberately omitted here.
+
+| Offset | Size | Observed bytes/value | Candidate meaning / evidence status |
+|---:|---:|---|---|
+| 0 | 1 | `01` | **Hypothesis:** accessory index 1; could also be a type/status value |
+| 1 | 4 | `18 15 00 00` = 5400 | **Inferred:** accessory SoC / 100 = 54% |
+| 5 | 2 | `00 00` | **Unknown** |
+| 7 | 4 | `00 08 00 00` = 2048 | **Observed:** matches the accessory capacity of 2048 Wh in both app screens; little-endian Wh interpretation remains **Inferred** from one capacity |
+| 11 | 4 | `00 00 00 00` | **Unknown** |
+| 15 | 16 | 14 ASCII characters, then two NUL bytes; SN omitted | **Observed:** exact match to expansion battery 1 SN in the device-information screen |
+| 31 | 2 | `c4 09` = 2500 | **Inferred:** accessory temperature / 100 = 25.0 C |
+| 33 | 1 | `01` | **Unknown** |
+| 34 | 16 | ASCII `10.03.00.15`, then five NUL bytes | **Observed:** exact match to the app's expansion-battery firmware version |
+| 50 | 1 | `01` | **Unknown** |
+
+The app-label matches associate this record with expansion battery 1.
+This remains one hardware/firmware combination, not repeated validation across
+accessories or firmware updates. No serial-number value or identifying source
+artifact is retained in this documentation.
+
+Numeric candidates use little-endian decoding. Signedness of temperature,
+record ordering, index stability, and multi-accessory repetition have not
+been established. The current configuration parser does not expose these
+accessory fields. The latest 0x60 reply in the same diagnostic lacks this
+table; this does not prove that 0x60 can never return it.
+
+This is a read-only interpretation, not a write schema. Do not copy the full
+identifier-bearing record into published examples or assume existing payload
+redaction covers this newly observed field. Future diagnostics/parser work
+must account for it explicitly.
