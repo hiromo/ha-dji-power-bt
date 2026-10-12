@@ -15,26 +15,30 @@ The implemented application command set is `0x5A`.
 
 ## 0x60 configuration read
 
-The manager sends the retained 48-byte `DEFAULT_STATUS_REQUEST_PAYLOAD` literal.
-Historically its two-byte source-code groups have been described as requesting
-these keys:
+The manager uses the exact 61-byte `DEFAULT_STATUS_REQUEST_PAYLOAD` observed
+from DJI Home on both Power 2000 and Power 1000 Mini. It fits an operation byte
+`00` followed by 30 little-endian selectors (**Inferred** grammar). See the
+[wire comparison](../implementation/app-reconnect-comparison-2026-10-12.md)
+for exact bytes. It replaces the historical 48-byte literal, whose incomplete
+final selector remains a hypothesis for earlier reconnect trouble.
 
-```text
-0x1002 0x1003 0x1005 0x1006 0x1007 0x1008
-0x1009 0x100A 0x100B 0x100C 0x100D 0x100E
-0x1015 0x1016 0x1018 0x1019 0x101B 0x101E
-0x1020 0x1022 0x1023 0x1024 0x1025
-```
+At initial connection and every reconnect, after authentication the manager
+reads the broad request twice without waiting for 0x62,
+then reads `00 01 10` twice and `00 04 10` twice. Each request has a new sequence
+and waits for its matching response before the next request. Duplicate reads
+reproduce the observed app sequence; their necessity is not established.
+Ordinary refresh/readback still performs one broad read.
 
-**Unknown request grammar:** those source-code groups do not independently
-establish the device's field boundaries or endianness. Another implementation
-sends the three-byte GETs `00 01 10` and `00 04 10` instead. Under the unconfirmed
-interpretation `00 + little-endian 16-bit selectors`, our literal would leave a
-trailing `25` byte. Successful configuration replies prove the literal has been
-accepted, not that every named key was requested as intended. See the
-[GET comparison backlog](unknowns.md#configuration-get-grammar-and-recovery)
-before changing this traffic. Do not silently append a byte or replace it with
-module sweeps on the strength of this interpretation alone.
+Each broad reply is applied as a configuration snapshot. The short replies
+are captured by the existing safe payload path but are not applied as complete
+snapshots: Mini returns empty 0x1001/0x1004 tables, while the observed Power 2000
+0x1001 contains a nested 0x100F accessory record. Their receipt must not erase
+basic configuration or relax unknown-table write safety. No accessory controls
+or new interpretation of these tables is introduced.
+
+The observed request restores reads of 0x101C, 0x101D, and 0x1021 that the
+historical literal omitted. This does not restore previously removed auxiliary
+controls or assign meanings to those fields; they remain unexposed.
 
 The device does not necessarily return every requested key. Returned-key presence is itself useful model/feature evidence; see `model-differences.md`.
 
@@ -54,11 +58,19 @@ A 0x60 read increments the config-read counter and updates the device-reported c
 
 ## 0x61 realtime telemetry
 
-`0x61` is parsed as realtime metrics. It updates battery/power state and schedules Home Assistant publication through the telemetry throttle.
+`0x61` is parsed throughout setup and retained internally. HA publication through the telemetry throttle starts only after initialization completes.
 
 See `telemetry.md`.
 
 ## 0x62 configuration report
+
+**Observed correction from the October 12 capture:** Mini can emit 0x61 first,
+then the app completes six 0x60 GETs before the first 0x62 arrives. On another
+connection the same Mini emits 0x62 first. A later 155.5-second report gap
+coexists with continuing telemetry. Therefore neither initial report arrival
+before GET nor a ten-second report cadence is guaranteed. The former strict
+HA startup gate has therefore been removed.
+See [timings and evidence](../implementation/app-startup-order-2026-10-12-capture.md).
 
 `0x62` is parsed using the same configuration parser as `0x60`. It is the preferred passive source for confirming recent writes.
 
@@ -85,11 +97,25 @@ cmd_type = 0x80
 payload  = 01
 ```
 
-Do not make a 0x62 ACK failure fatal to the whole integration; current behavior logs it at debug level.
+0x62 ACKs remain best-effort during initialization and normal operation;
+failures are logged at debug level. Reports are not an initialization barrier.
+
+**Observed in the October 9 Android capture:** all 22 reports across the three
+successful app sessions receive this same ACK (Mini two, Power 2000 twenty).
+The first report is received and ACKed before the first GET in every session.
+This supports retaining ACKs; it does not prove the app explicitly waits for
+the first report. The later October 12 capture disproves a universal
+report-before-GET prerequisite.
 
 ## 0x63 writes
 
 `0x63` is a request/response setting transaction. A matching-sequence response with command type `0x80` proves request completion. The payload contains per-property result codes.
+
+**Observed app-only initialization difference:** both Power 2000 sessions in
+the October 9 capture also send a 0x63 containing identifier companion 0x100E
+and one-byte 0x1023 after the broad reads. Mini does not. The latter property's
+meaning is **Unknown**; this is not evidence of a reconnect/reset command or
+authorization to add the write to HA initialization.
 
 Currently decoded write-result IDs include:
 

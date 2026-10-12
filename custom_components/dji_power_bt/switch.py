@@ -118,6 +118,8 @@ class DjiPowerSwitch(DjiPowerEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool | None:
+        if not self.description.available_when_disconnected and not self.manager.is_ready:
+            return None
         return self.description.is_on_fn(self.manager)
 
     @property
@@ -132,6 +134,8 @@ class DjiPowerSwitch(DjiPowerEntity, SwitchEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
+        if not self.manager.is_ready:
+            return {}
         attrs = {
             "last_write_result": self.manager.state.last_write_result,
             "reflection_confirmed": self.manager.state.reflection_confirmed,

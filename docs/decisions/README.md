@@ -11,5 +11,6 @@ Read the relevant ADR before simplifying code that looks more complicated than n
 | `0005-preserve-unknown-protocol-data.md` | Preserve unknown protocol data and uncertainty instead of guessing |
 | `0006-use-home-assistant-bluetooth-dependencies.md` | Use HA Bluetooth dependencies instead of pinning a private connector version |
 | `0007-reset-public-config-entry-baseline.md` | Start public identity at domain `dji_power_bt` and config-entry version 1 |
+| `0008-follow-observed-app-initialization.md` | Keep app-style reads and gate ordinary controls/publication until ready |
 
 Add an ADR when a future agent would otherwise be likely to remove an important non-obvious constraint.

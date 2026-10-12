@@ -63,7 +63,14 @@ button
 
 ## Availability principles
 
-Most data/control entities require a connected and authenticated manager plus a meaningful current value or runtime feature availability.
+Ordinary data/control entities require BLE enabled, connected, authenticated,
+and `connection_phase = ready`, plus a meaningful current value or runtime
+feature availability. During initialization, received values remain internal;
+entity values and device-derived attributes are not exposed. Initial reports
+and telemetry do not publish listener updates. The ready transition publishes
+the latest buffered state once, then normal telemetry throttling resumes.
+Direct setting services enforce the same readiness condition and reject early
+calls without sending packets or queuing deferred actions.
 
 The BLE switch remains available while disconnected so a user can re-enable BLE.
 
@@ -272,7 +279,7 @@ the `Tariff period` sensor.
 
 ## Firmware registry sync
 
-Firmware decoded from common 0x1000 is synced into Home Assistant Device Registry after the first configuration report arrives. Entity platform setup may happen before that report, so registry synchronization is intentionally delayed/update-capable.
+Firmware decoded from common 0x1000 is synced into Home Assistant Device Registry after initialization completes, then on subsequent configuration reports. Entity platform setup may happen before that report, so registry synchronization is intentionally delayed/update-capable.
 
 The `Firmware` and `Communication module firmware` sensors are diagnostic and
 disabled by default. DJI Home labels the latter as its dongle version. The public

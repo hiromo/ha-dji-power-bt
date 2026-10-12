@@ -35,4 +35,4 @@ class DjiPowerEntity(Entity):
 
     @property
     def available(self) -> bool:
-        return self.manager.state.connected and self.manager.state.authenticated
+        return self.manager.is_ready

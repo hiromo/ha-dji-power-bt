@@ -12,7 +12,9 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 
 from .const import CHAR_WRITE_C304, DOMAIN
-from .manager_constants import GATT_WRITE_TIMEOUT, WRITE_LOCK_TIMEOUT
+from .manager_constants import (
+    GATT_WRITE_TIMEOUT, WRITE_LOCK_TIMEOUT,
+)
 from .manager_types import DjiPowerAuthError, DjiPowerConnectionError, PendingVerification
 from .manager_utils import utcnow_iso
 from .protocol import (
@@ -104,6 +106,8 @@ class ManagerTransportMixin:
             self.state.last_0x66_at = now
 
     def _schedule_telemetry_publish(self) -> None:
+        if not self.is_ready:
+            return
         loop = asyncio.get_running_loop()
         now = loop.time()
         interval = max(1.0, min(60.0, self.telemetry_update_interval))
@@ -118,6 +122,8 @@ class ManagerTransportMixin:
     def _publish_telemetry(self) -> None:
         self._telemetry_publish_timer = None
         self._telemetry_publish_pending = False
+        if not self.is_ready:
+            return
         self._last_telemetry_publish_monotonic = asyncio.get_running_loop().time()
         self._notify_listeners()
 
@@ -131,7 +137,8 @@ class ManagerTransportMixin:
     def _apply_config(self, cfg: PowerConfig, *, source: str, notify: bool = True) -> None:
         self.state.config = cfg
         self._unconfirmed_config_writes.clear()
-        self._sync_device_registry_firmware()
+        if self.is_ready:
+            self._sync_device_registry_firmware()
         self._config_generation += 1
         # _apply_config is only called for a parsed device report/read response.
         # Optimistic ACK updates mutate the existing object without advancing this
@@ -140,7 +147,7 @@ class ManagerTransportMixin:
         if source.startswith("0x60"):
             self.state.last_0x60_refresh_at = utcnow_iso()
         self._resolve_verifications_from_config(source=source)
-        if notify:
+        if notify and self.is_ready:
             self._notify_listeners()
 
     def _sync_device_registry_firmware(self) -> None:
@@ -283,15 +290,27 @@ class ManagerTransportMixin:
                     future.exception()
 
     async def _authenticate(self) -> None:
-        session_frame = await self._request(cmd_id=0x6A, payload=b"\x00")
-        if len(session_frame.payload) < 5 or session_frame.payload[0] != 0:
-            raise DjiPowerAuthError("invalid 0x6A session response")
+        for _ in range(2):
+            session_frame = await self._request(cmd_id=0x6A, payload=b"\x00")
+            if len(session_frame.payload) < 5 or session_frame.payload[0] != 0:
+                raise DjiPowerAuthError("invalid 0x6A session response")
         auth_payload = b"\x01" + session_frame.payload[1:5] + self.local_auth_key.encode("ascii") + b"\x00"
         auth_frame = await self._request(cmd_id=0x6A, payload=auth_payload)
         if not auth_frame.payload or auth_frame.payload[0] != 0:
             raise DjiPowerAuthError("0x6A authentication failed")
         self.state.authenticated = True
         _LOGGER.debug("DJI Power protocol authentication succeeded for %s", self.address)
+
+    async def _read_initial_config(self) -> PowerConfig:
+        for _ in range(2):
+            cfg = await self._read_current_config()
+            self._apply_config(cfg, source="0x60_initial", notify=False)
+        for payload in (b"\x00\x01\x10", b"\x00\x04\x10"):
+            for _ in range(2):
+                self.state.config_read_request_count += 1
+                await self._request(cmd_id=0x60, payload=payload)
+        # Individual table replies are not complete configuration snapshots.
+        return cfg
 
     async def _read_current_config(self) -> PowerConfig:
         self.state.config_read_request_count += 1
@@ -666,7 +685,7 @@ class ManagerTransportMixin:
         self._pending_verifications.clear()
         self.state.write_verification_pending = False
 
-    def _schedule_0x62_ack(self, frame: DumlFrame) -> None:
+    def _schedule_0x62_ack(self, frame: DumlFrame) -> asyncio.Task[bool]:
         task = self.hass.loop.create_task(
             self._ack_0x62(frame, generation=self._connection_generation)
         )
@@ -676,6 +695,7 @@ class ManagerTransportMixin:
             self._gatt_traffic.max_pending_ack_tasks, len(self._ack_tasks)
         )
         task.add_done_callback(self._ack_tasks.discard)
+        return task
 
     def _cancel_ack_tasks(self) -> None:
         for task in tuple(self._ack_tasks):
@@ -683,10 +703,10 @@ class ManagerTransportMixin:
                 task.cancel()
         self._ack_tasks.clear()
 
-    async def _ack_0x62(self, frame: DumlFrame, *, generation: int | None = None) -> None:
+    async def _ack_0x62(self, frame: DumlFrame, *, generation: int | None = None) -> bool:
         if generation is not None and generation != self._connection_generation:
             self._gatt_traffic.stale_write_rejected_count += 1
-            return
+            return False
         try:
             await self._write_frame(
                 seq=frame.seq,
@@ -697,9 +717,13 @@ class ManagerTransportMixin:
             )
         except Exception as exc:  # noqa: best-effort ACK
             _LOGGER.debug("Failed to ACK 0x62: %s", exc)
+            return False
+        return True
 
     async def _ensure_ready(self) -> None:
         if not self.state.ble_enabled:
             raise HomeAssistantError("DJI Power BLE is disabled")
         if not self.state.connected or not self.state.authenticated:
             raise HomeAssistantError("DJI Power is not connected/authenticated")
+        if not self.is_ready:
+            raise HomeAssistantError("DJI Power initialization is not complete")

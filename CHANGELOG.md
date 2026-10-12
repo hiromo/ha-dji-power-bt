@@ -9,6 +9,14 @@ notable user impact rather than every internal code change.
 
 ## Unreleased
 
+- Follow the observed DJI Home initialization order on connect/reconnect:
+  two session requests, authentication, two
+  61-byte configuration reads, then two reads each of 0x1001 and 0x1004.
+  Do not require an initial 0x62 report; continue ACKing reports during setup.
+- Keep ordinary entities unavailable and suppress partial values/attributes until
+  initialization completes. Reject premature setting actions, including direct
+  services, and publish the latest buffered state on readiness.
+
 ## 0.7.32 - 2026-09-11
 
 - Suppressed redundant setting writes, including repeated automation calls,

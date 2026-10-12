@@ -271,11 +271,11 @@ def test_mini_captured_charging_mode_write_shape():
     generated, _ = protocol.build_0x63_charging_mode_payload_from_config(cfg, "fast")
     assert generated[16:] == captured_write[16:]
 
-def test_removed_mini_auxiliary_settings_are_not_requested_or_exposed():
+def test_app_requested_mini_auxiliary_settings_remain_unexposed():
     request = protocol.DEFAULT_STATUS_REQUEST_PAYLOAD
-    assert b"\x10\x1c" not in request
-    assert b"\x10\x1d" not in request
-    assert b"\x10\x21" not in request
+    selectors = {int.from_bytes(request[i:i+2], "little")
+                 for i in range(1, len(request), 2)}
+    assert {0x101C, 0x101D, 0x1021} <= selectors
 
     payload = (
         tlv(0x101C, b"\x01\x01")

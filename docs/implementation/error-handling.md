@@ -66,6 +66,14 @@ Capture the setup phase before an unexpected-disconnect callback resets it to
 
 ## Request timeout
 
+Initial setup does not require a 0x62 report. All six initial GETs use the normal
+request/write deadlines; authentication or GET failure aborts setup. Report ACKs
+remain best-effort during both initialization and normal operation. Backend write
+timeouts still mark the active transport unhealthy through the existing path.
+
+Ordinary setting calls before readiness raise `HomeAssistantError` without
+sending prewrite reads or writes. They are not deferred for later execution.
+
 `_request()` creates a future before writing and waits for a matching response. The pending entry is removed in `finally`; incomplete futures are cancelled and completed-future exceptions are consumed safely so cleanup does not create unhandled-future warnings.
 
 ## Write errors

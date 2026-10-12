@@ -5,18 +5,35 @@
 Normal setup is:
 
 ```text
-idle
- -> connecting/resolving
- -> GATT connected
- -> subscribing to C305 notifications
- -> authenticating with 0x6A
- -> initial configuration read
- -> ready
+idle -> connecting/resolving -> GATT connected -> C305 notification subscription
+ -> two 0x6A session requests -> key authentication
+ -> initial_config: two 61-byte GETs, two 0x1001 GETs, two 0x1004 GETs
+ -> ready: publish latest buffered state
 ```
 
-`connected` means an active GATT client has been adopted. `authenticated` means 0x6A authentication succeeded. `ready` means authentication and initial configuration completed.
+There is no mandatory initial 0x62 wait or report timeout. The October 12 app
+capture includes successful GET-before-0x62 startup on Mini; see the
+[analysis](app-startup-order-2026-10-12-capture.md). First-0x61 timing remains a
+hypothesis and is not an additional prerequisite in the implementation.
+All six GETs are sequential and retain ordinary request/write deadlines.
+No extra 0x63 initialization write is sent.
 
-Do not treat a GATT connection alone as service readiness.
+`connected` means an active GATT client has been adopted. `authenticated` means
+0x6A authentication succeeded. `ready` means authentication and all six initial
+reads completed. Ordinary settings require all three plus BLE enabled; requests
+made before readiness fail instead of being queued for later execution.
+
+Notifications continue to update internal state and liveness during setup.
+Qualifying 0x62 reports retain best-effort ACKs with bounded GATT deadlines,
+regardless of readiness. Missing reports do not abort setup. Authentication/read
+failures and disconnects still use the existing cleanup/backoff path.
+
+Initial telemetry/configuration does not publish to ordinary HA entities, which
+remain unavailable and hide device-derived attributes. Firmware registry sync
+is deferred until ready. The ready transition publishes the latest retained
+state. Connection failure/disconnect notifications and diagnostic connectivity
+remain enabled. This prevents partially initialized state from triggering
+ordinary entity automations; the manager also rejects direct setting services.
 
 ## Persistent client ownership
 

@@ -324,6 +324,7 @@ def test_tariff_button_operation_skips_matching_profile_and_writes_0x1016_otherw
         item = make_manager()
         item.state.connected = True
         item.state.authenticated = True
+        item.state.connection_phase = "ready"
         item.state.config = protocol.PowerConfig(
             source_cmd_id=0x60,
             source_payload=b"",
@@ -391,6 +392,7 @@ def test_custom_tariff_action_skips_matching_full_table_regardless_of_order() ->
         item = make_manager()
         item.state.connected = True
         item.state.authenticated = True
+        item.state.connection_phase = "ready"
         periods = [
             {
                 "tariff": "off_peak",
@@ -475,6 +477,7 @@ def test_bulk_0x1018_service_writes_all_requested_fields_once_and_skips_noop() -
         item = make_manager()
         item.state.connected = True
         item.state.authenticated = True
+        item.state.connection_phase = "ready"
         item.state.config = protocol.PowerConfig(
             source_cmd_id=0x60,
             source_payload=b"",

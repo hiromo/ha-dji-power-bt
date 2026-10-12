@@ -64,8 +64,21 @@ This looks flag-like but the parent record meaning is unresolved. Do not use it 
 
 ### Configuration GET grammar and recovery
 
+**Latest evidence, October 12 evening:** the broad/short GET bytes are unchanged,
+but a successful Mini session sends GETs after 0x61 and before 0x62. Another
+session on the same Mini has 0x62 first; their initial telemetry bodies match.
+First 0x61 precedes GET in all six successful sessions across both captures,
+making telemetry-driven readiness a candidate, not a proven trigger. A fixed
+model/state-flag branch is not established. See the
+[new capture analysis](../implementation/app-startup-order-2026-10-12-capture.md).
+
+The earlier HA snapshots show successful Power 2000 recovery but continuing
+Mini failure before GET. The former mandatory 0x62 wait could not reproduce all
+app paths. Unknowns now include first-notification readiness, a bounded fallback
+when neither report nor telemetry arrives, and transport-level disconnect causes.
+
 **Observed in source and synthetic wire execution, not a new device capture:**
-our retained GET literal is 48 bytes, beginning `00 00 10 02 10 03` and ending
+the historical GET literal was 48 bytes, beginning `00 00 10 02 10 03` and ending
 `10 23 10 24 10 25`. The zuyan9 implementation at commit
 `4682acbef33bfb9b4734818cc640f59dbd7c2758` instead sends two GET payloads,
 `00 01 10` and `00 04 10`, called module sweeps there.
@@ -73,7 +86,7 @@ our retained GET literal is 48 bytes, beginning `00 00 10 02 10 03` and ending
 **Hypothesis:** a one-byte operation prefix followed by little-endian 16-bit
 selectors would interpret the other requests as `0x1001` and `0x1004`. Applying
 that grammar to our literal gives 23 complete selectors plus an unmatched
-trailing byte `25`. The current two-byte source-code grouping is not evidence
+trailing byte `25`. The historical two-byte source-code grouping is not evidence
 against that interpretation, but neither implementation documents a complete
 device-validated GET grammar. Do not treat this as a confirmed malformed packet
 or infer the necessary repair byte.
@@ -86,9 +99,25 @@ comparison. Compare DJI Home GETs and replies on the same firmware, then test
 one request mode at a time without changing ACK policy or connection parameters.
 Preserve unknown returned records and existing write safety checks.
 
-The other implementation also omits our conditional `0x62/0x40` ACK. Whether
-DJI Home sends `0x62/0x80` with payload `01`, and whether continuous ACK handling
-affects long-session station behavior, remain separate capture questions.
+**Observed update, October 9 Android capture analyzed October 12:** DJI Home
+sends a 61-byte broad request twice, then each short request twice, on both
+models. Its broad request fits `00 + 30 little-endian selectors`. This strengthens
+the **Inferred** grammar and missing final `10` hypothesis for HA's 48-byte
+literal; it does not prove the cause of reconnect failure. Mini's short replies
+are only 24 bytes, so replacing the broad request with short sweeps alone is
+not justified. In the October 9 capture, the first report/ACK precedes GET in all successful app sessions;
+HA formerly started GET immediately after authentication. Timing remains a
+separate causal hypothesis. The current implementation follows the observed
+app read sequence by explicit operator decision: exact 61-byte GET, duplicate
+reads, and separate 0x1001/0x1004 requests. The later capture led to removal
+of the report/ACK barrier; first-0x61 gating remains unproven. Recovery on real
+hardware after this change has not yet been validated.
+See the [detailed comparison and controlled experiments](../implementation/app-reconnect-comparison-2026-10-12.md).
+
+The other implementation also omits our conditional `0x62/0x40` ACK.
+The October 9 capture now establishes that DJI Home does send `0x62/0x80`
+with payload `01` for all 22 observed reports. Whether continuous ACK handling
+affects long-session station behavior remains a separate question.
 See the [comparison and change review](../implementation/ble-comparison-and-review-2026-09-11.md).
 
 ### Returned records

@@ -74,6 +74,12 @@ It does not use the Power 2000 tariff/off-peak/peak control model.
 
 ## Device-reported capability signals
 
+**Observed startup variability (October 12):** the same Mini uses both
+telemetry-first/GET-before-report and report-first ordering; Power 2000 retains
+report-first ordering in the available samples. Broad and short GET bytes are
+identical across models. No fixed model-specific startup branch follows from
+this evidence; see the [capture analysis](../implementation/app-startup-order-2026-10-12-capture.md).
+
 **Observed and important for future capability discovery**
 
 The integration requests a broad set of keys in 0x60, but devices return different subsets. The returned key set is a protocol-level feature signal.

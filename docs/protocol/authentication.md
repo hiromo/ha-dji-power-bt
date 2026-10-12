@@ -54,7 +54,7 @@ authorization.
 
 **Confirmed current implementation**
 
-Authentication uses command set `0x5A`, command `0x6A`, in two requests.
+Authentication uses command set `0x5A`, command `0x6A`, in three requests: two session requests and one key-authentication request.
 
 ### Step 1: obtain session material
 
@@ -65,7 +65,9 @@ cmd_id  = 0x6A
 payload = 00
 ```
 
-The response must contain at least five payload bytes and payload byte 0 must be zero. Bytes 1..4 are reused in the second request.
+Send this request twice, validating each response: at least five payload bytes
+and status byte 0 equal to zero. Use bytes 1..4 of the second response for
+key authentication. Requests are sequential with distinct sequence numbers.
 
 ### Step 2: authenticate with the pair key
 
@@ -81,6 +83,20 @@ Build:
 Send that as another `0x6A` request. Authentication succeeds when the response payload is non-empty and response byte 0 is zero.
 
 Only after this step does the manager set `state.authenticated = True`.
+
+## October 9 Android sequence observation (analyzed 2026-10-12)
+
+**Observed:** in one successful Mini session and two successful Power 2000
+sessions, DJI Home requests session material twice before authenticating with
+the pair key. Each reply provides different material; final authentication
+uses the second reply and the same structural format as the integration.
+All authentication responses indicate success. No authentication payload or
+secret is retained in the [comparison report](../implementation/app-reconnect-comparison-2026-10-12.md).
+
+**Unknown:** why the app repeats the session request. This is not evidence that
+HA must repeat it: the supplied failed Mini attempts already authenticate
+successfully and fail later during initial configuration. The integration now repeats it to follow the operator-selected app sequence,
+not because repetition is proven necessary for authentication.
 
 ## Security requirements
 

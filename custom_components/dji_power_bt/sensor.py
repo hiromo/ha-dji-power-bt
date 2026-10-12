@@ -411,10 +411,14 @@ class DjiPowerSensor(DjiPowerEntity, SensorEntity):
 
     @property
     def native_value(self) -> Any:
+        if not self.manager.is_ready:
+            return None
         return self.description.value_fn(self.manager)
 
     @property
     def available(self) -> bool:
+        if not super().available:
+            return False
         if self.description.available_fn is not None:
             available = self.description.available_fn(self.manager)
         else:
@@ -425,6 +429,8 @@ class DjiPowerSensor(DjiPowerEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
+        if not self.manager.is_ready:
+            return None
         if self.description.attrs_fn is None:
             return None
         return self.description.attrs_fn(self.manager)
@@ -483,7 +489,9 @@ class DjiPowerTariffPeriodSensor(DjiPowerEntity, SensorEntity):
         return self._calculate_scheduled_period()
 
     @property
-    def native_value(self) -> str:
+    def native_value(self) -> str | None:
+        if not self.manager.is_ready:
+            return None
         return self._period.state
 
     @property
@@ -492,6 +500,8 @@ class DjiPowerTariffPeriodSensor(DjiPowerEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        if not self.manager.is_ready:
+            return {}
         cfg = self.manager.state.config
         slots = cfg.tariff_slots if cfg else None
         scheduled_period = self._calculate_scheduled_period()

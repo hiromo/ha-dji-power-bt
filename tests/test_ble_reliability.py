@@ -31,6 +31,7 @@ def config():
 def ready_manager():
     item = base.make_manager()
     item.state.connected = item.state.authenticated = True
+    item.state.connection_phase = "ready"
     item._apply_config(config(), source="0x62", notify=False)
     return item
 
@@ -227,7 +228,8 @@ def test_subscription_isolation_and_setup_failure_phase(monkeypatch):
         item._maybe_cleanup_stale_connections = AsyncMock()
         item._establish_client = AsyncMock(side_effect=[first, second])
         item._authenticate = AsyncMock()
-        item._read_current_config = AsyncMock(return_value=config())
+        item._wait_initial_config_report = AsyncMock()
+        item._read_initial_config = AsyncMock(return_value=config())
         await item._connect_auth_and_init()
         old_callback = first.callback
         await item.async_disconnect(reason="test")
@@ -251,7 +253,7 @@ def test_subscription_isolation_and_setup_failure_phase(monkeypatch):
             third.is_connected = False
             item._handle_disconnected_callback(third)
             raise base.manager_mod.DjiPowerConnectionError("test disconnect")
-        item._read_current_config = failing_read
+        item._read_initial_config = failing_read
         with pytest.raises(base.manager_mod.DjiPowerConnectionError):
             await item._connect_auth_and_init()
         assert item.state.last_connection_failure_phase == "initial_config"

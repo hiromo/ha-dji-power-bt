@@ -73,6 +73,13 @@ A domain runtime shared by all DJI Power entries owns the connection-operation l
 `manager_transport.py`
 : DUM-like request/response transport, GATT writes, authentication, configuration reads, unsolicited command handling, write ACK processing, cache use, write verification, and 0x62 ACKs.
 
+Authentication is followed by six sequential app-style GETs without a mandatory
+0x62 or 0x61 wait. Reports are parsed and ACKed throughout initialization.
+`is_ready` requires BLE enabled, connected, authenticated, and phase `ready`.
+Ordinary controls and entity publication use this boundary; internal protocol
+requests and diagnostic connection notifications remain independent.
+Short table replies never replace the complete configuration snapshot.
+
 `manager_payload.py`
 : Safe payload capture, write history, reassembly diagnostics, and 0x66 HMS fast-path bookkeeping.
 
@@ -157,7 +164,11 @@ second on currently tested stations. Home Assistant listener notifications for
 realtime telemetry are throttled to the configured interval, default 5 seconds
 and constrained to 1-60 seconds.
 
-Configuration reports and write state changes can publish independently of telemetry throttling.
+Configuration reports and write state changes can publish independently of telemetry throttling
+only after initialization. During setup, metrics/configuration are retained internally;
+ordinary entities are unavailable and hide values and device-derived attributes.
+The ready transition publishes the latest state and syncs firmware registry metadata.
+Connection diagnostics and the BLE enable switch remain usable during setup/failure.
 
 ## Compatibility boundaries
 

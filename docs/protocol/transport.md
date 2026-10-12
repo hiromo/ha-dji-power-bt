@@ -9,6 +9,15 @@
 
 The manager writes complete DUM-like frames to C304 and receives an arbitrary byte stream through C305 notifications.
 
+**Observed in the October 9 Android capture (analyzed October 12):** both models
+use C304/C305, ATT Write Request (matching HA's `response=True`), and the existing
+DUM framing. All 18 app GET frames rebuild byte-for-byte with the current
+builder. Android negotiates MTU 517; connection updates reach 48.75 ms interval,
+zero peripheral latency, and 5,000 ms supervision timeout. The supplied HA
+diagnostics do not retain comparable negotiated parameters, so these are app
+observations, not established HA/app mismatches. See the
+[reconnect comparison](../implementation/app-reconnect-comparison-2026-10-12.md).
+
 ## Notification boundaries are not frame boundaries
 
 A single DJI frame may be split across multiple ATT notifications, and a notification may contain multiple DJI frames. Never parse one BLE notification as one application frame.

@@ -408,14 +408,14 @@ class ManagerConnectionMixin:
                             else "dji_protocol_authenticated_address_only"
                         )
                         self.state.connection_phase = "initial_config"
-                        cfg = await self._read_current_config()
-                        self._apply_config(cfg, source="0x60_initial", notify=False)
+                        await self._read_initial_config()
                         if self._last_notify_monotonic is None:
                             self._last_notify_monotonic = (
                                 asyncio.get_running_loop().time()
                             )
                         self.state.connection_phase = "ready"
                         self._mark_connection_ready()
+                        self._sync_device_registry_firmware()
                         self._record_connection_event(
                             "initial_config_complete",
                             attempt_id=attempt_id,

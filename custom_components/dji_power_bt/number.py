@@ -110,18 +110,26 @@ class DjiPowerNumber(DjiPowerEntity, NumberEntity):
 
     @property
     def native_min_value(self) -> float:
+        if not self.manager.is_ready:
+            return 0.0
         return float(self.description.min_fn(self.manager))
 
     @property
     def native_max_value(self) -> float:
+        if not self.manager.is_ready:
+            return 100.0
         return float(self.description.max_fn(self.manager))
 
     @property
     def native_step(self) -> float:
+        if not self.manager.is_ready:
+            return 1.0
         return float(self.description.step_fn(self.manager))
 
     @property
     def native_value(self) -> float | None:
+        if not self.manager.is_ready:
+            return None
         value = self.description.value_fn(self.manager)
         return float(value) if value is not None else None
 
@@ -135,6 +143,8 @@ class DjiPowerNumber(DjiPowerEntity, NumberEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
+        if not self.manager.is_ready:
+            return {}
         attrs = {
             "last_write_result": self.manager.state.last_write_result,
             "reflection_confirmed": self.manager.state.reflection_confirmed,

@@ -87,10 +87,14 @@ class DjiPowerSelect(DjiPowerEntity, SelectEntity):
 
     @property
     def options(self) -> list[str]:
+        if not self.manager.is_ready:
+            return []
         return self.description.options_fn(self.manager)
 
     @property
     def current_option(self) -> str | None:
+        if not self.manager.is_ready:
+            return None
         return self.description.current_fn(self.manager)
 
     @property
@@ -99,6 +103,8 @@ class DjiPowerSelect(DjiPowerEntity, SelectEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
+        if not self.manager.is_ready:
+            return {}
         attrs = {
             "last_write_result": self.manager.state.last_write_result,
             "reflection_confirmed": self.manager.state.reflection_confirmed,

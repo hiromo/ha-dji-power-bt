@@ -143,7 +143,7 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         self._capture_max_frames = DEFAULT_CAPTURE_MAX_FRAMES
         self._capture_started_at: str | None = None
         self._capture_finished_at: str | None = None
-        self._ack_tasks: set[asyncio.Task[None]] = set()
+        self._ack_tasks: set[asyncio.Task[bool]] = set()
         self._hms_pattern_history: deque[dict[str, Any]] = deque(
             maxlen=HMS_PATTERN_HISTORY_LIMIT
         )
@@ -164,6 +164,16 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         self._reconnect_not_before_monotonic: float | None = None
         self._fresh_advertisement_required = False
         self._fresh_advertisement_received_at: str | None = None
+
+    @property
+    def is_ready(self) -> bool:
+        """Allow ordinary controls/publication only on a fully initialized link."""
+        return (
+            self.state.ble_enabled
+            and self.state.connected
+            and self.state.authenticated
+            and self.state.connection_phase == "ready"
+        )
 
     async def async_start(self) -> None:
         if self._runner_task and not self._runner_task.done():
@@ -228,8 +238,7 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
     def energy_optimization_control_available(self) -> bool:
         cfg = self.state.config
         return bool(
-            self.state.connected
-            and self.state.authenticated
+            self.is_ready
             and self.capabilities.has_energy_optimization
             and cfg is not None
             and cfg.tlv_1018_value is not None
@@ -240,15 +249,14 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
     def tariff_preset_control_available(self) -> bool:
         """Return whether the captured Power 2000 tariff writer is available."""
         return bool(
-            self.state.connected
-            and self.state.authenticated
+            self.is_ready
             and self.model_code == 0x94
             and self.capabilities.has_tariff_slots
             and self.state.config is not None
         )
 
     def is_runtime_feature_available(self, feature: RuntimeFeature) -> bool:
-        if not self.state.connected or not self.state.authenticated:
+        if not self.is_ready:
             return False
         scheduled_features = {
             RuntimeFeature.OFF_PEAK_CHARGING,
