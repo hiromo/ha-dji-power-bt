@@ -262,8 +262,11 @@ continue.
 
 After an unexpected disconnect, the integration waits five seconds, discards
 the old BLE device object, and requires a fresh connectable advertisement.
-Recoverable failures then wait **10, 30, 60, 120, and 300 seconds**; a successful
-authenticated initialization resets that backoff. Check RF coverage, DJI Home
+Recoverable failures then wait **10, 20, 30, and 60 seconds**, continuing at
+60 seconds without an attempt limit while BLE is enabled and the integration
+is running. Successful authenticated initialization resets that backoff.
+These delays follow failed attempts and cleanup; they are not fixed intervals
+between connection attempts. Check RF coverage, DJI Home
 Bluetooth use, and free adapter/proxy slots before assuming retries have stopped.
 
 ## Diagnostics and protocol capture
