@@ -55,7 +55,7 @@ def test_connection_constants_have_one_shared_source_of_truth() -> None:
     assert "UNEXPECTED_DISCONNECT_SETTLE_SECONDS = 5.0" in source
     assert "FRESH_ADVERTISEMENT_TIMEOUT_SECONDS = 60.0" in source
     assert "ESTABLISH_CONNECTION_MAX_ATTEMPTS = 2" in source
-    assert "RECONNECT_BACKOFF_SECONDS = (10.0, 30.0, 60.0, 120.0, 300.0)" in source
+    assert "RECONNECT_BACKOFF_SECONDS = (10.0, 20.0, 30.0, 60.0)" in source
 
 
 def test_expected_disconnect_bookkeeping_remains_weak_reference_based() -> None:

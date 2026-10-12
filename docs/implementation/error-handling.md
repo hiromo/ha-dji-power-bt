@@ -35,7 +35,9 @@ A connection error should not be interpreted as a GATT-slot leak without Bluetoo
 
 Recoverable connection exceptions increment `consecutive_connect_failures`, save `last_connection_error`, categorize the failure, and schedule the configured backoff. The manager runner continues.
 
-The retry schedule is capped at 300 seconds.
+The retry delays are 10, 20, 30, then 60 seconds. Retries continue at the
+60-second cap without an attempt limit while BLE is enabled and the runner is
+active. Full readiness resets the progression.
 
 ## Setup abort
 

@@ -251,6 +251,29 @@ The event-name set is extensible. Adding an event is compatible; renaming or
 removing an established event used for field diagnosis requires corresponding
 documentation and behavior-test changes.
 
+### Disconnect call measurements
+
+The existing `disconnect_complete` event additionally includes:
+
+| Field | Meaning |
+| --- | --- |
+| `disconnect_started_connected` | Best-effort client connection state immediately before the disconnect decision/call, after any `stop_notify`; `null` if unavailable. |
+| `disconnect_duration_s` | Monotonic elapsed seconds for the attempted `client.disconnect()` call and timeout/cancellation unwinding; `null` if the call was skipped. Excludes notification shutdown and connection-lock waiting. |
+
+`disconnect_result` distinguishes `ok`, `timeout`, `error:<class>`,
+`already_disconnected`, and now `cancelled`. Cancellation is recorded and
+re-raised, not swallowed. No new per-call event is added; the existing bounded
+local/domain histories retain these scalar fields. If cancellation occurs
+before the disconnect stage (for example during `stop_notify`), no disconnect
+call measurement is emitted.
+
+`disconnect_complete` means this integration's disconnect stage ended, not that
+the controller has freed every resource. Even `ok` is backend-call completion,
+not a measurement of physical radio/resource release. A timeout measurement is
+time until this caller stopped waiting, not the backend's eventual finish time.
+The existing `disconnect_requested.client_is_connected` remains the state
+before notification shutdown and must not be confused with the new field.
+
 ## Domain-wide runtime
 
 `domain_connection_runtime` exists to diagnose interactions between multiple

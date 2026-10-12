@@ -877,48 +877,62 @@ class ManagerConnectionMixin:
             else:
                 stop_notify_result = "ok"
 
+        # Measure the backend call alone, excluding stop_notify and lock waits.
+        loop = asyncio.get_running_loop()
+        disconnect_started_connected = client_is_connected(client)
+        disconnect_duration_s: float | None = None
         disconnect_result = "already_disconnected"
-        if force or client_is_connected(client):
-            try:
-                async with asyncio.timeout(3):
-                    await client.disconnect()
-            except TimeoutError as exc:
-                disconnect_result = "timeout"
-                self._record_connection_event(
-                    "disconnect_failed",
-                    client=client,
-                    expected_disconnect=expected,
-                    exception=exc,
-                    details={
-                        "disconnect_context": context,
-                        "disconnect_result": disconnect_result,
-                    },
-                )
-            except Exception as exc:
-                disconnect_result = f"error:{type(exc).__name__}"
-                self._record_connection_event(
-                    "disconnect_failed",
-                    client=client,
-                    expected_disconnect=expected,
-                    exception=exc,
-                    details={
-                        "disconnect_context": context,
-                        "disconnect_result": disconnect_result,
-                    },
-                )
-            else:
-                disconnect_result = "ok"
-
-        self._record_connection_event(
-            "disconnect_complete",
-            client=client,
-            expected_disconnect=expected,
-            details={
-                "disconnect_context": context,
-                "stop_notify_result": stop_notify_result,
-                "disconnect_result": disconnect_result,
-            },
-        )
+        try:
+            if force or disconnect_started_connected:
+                started_at = loop.time()
+                try:
+                    try:
+                        async with asyncio.timeout(3):
+                            await client.disconnect()
+                    finally:
+                        disconnect_duration_s = max(0.0, loop.time() - started_at)
+                except asyncio.CancelledError:
+                    disconnect_result = "cancelled"
+                    raise
+                except TimeoutError as exc:
+                    disconnect_result = "timeout"
+                    self._record_connection_event(
+                        "disconnect_failed",
+                        client=client,
+                        expected_disconnect=expected,
+                        exception=exc,
+                        details={
+                            "disconnect_context": context,
+                            "disconnect_result": disconnect_result,
+                        },
+                    )
+                except Exception as exc:
+                    disconnect_result = f"error:{type(exc).__name__}"
+                    self._record_connection_event(
+                        "disconnect_failed",
+                        client=client,
+                        expected_disconnect=expected,
+                        exception=exc,
+                        details={
+                            "disconnect_context": context,
+                            "disconnect_result": disconnect_result,
+                        },
+                    )
+                else:
+                    disconnect_result = "ok"
+        finally:
+            self._record_connection_event(
+                "disconnect_complete",
+                client=client,
+                expected_disconnect=expected,
+                details={
+                    "disconnect_context": context,
+                    "stop_notify_result": stop_notify_result,
+                    "disconnect_result": disconnect_result,
+                    "disconnect_started_connected": disconnect_started_connected,
+                    "disconnect_duration_s": disconnect_duration_s,
+                },
+            )
         return disconnect_result
 
     def _reset_protocol_state(self) -> None:

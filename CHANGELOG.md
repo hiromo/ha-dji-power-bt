@@ -9,6 +9,11 @@ notable user impact rather than every internal code change.
 
 ## Unreleased
 
+- Shorten reconnect backoff to 10, 20, 30, and at most 60 seconds, continuing
+  retries while BLE is enabled and resetting after successful initialization.
+- Add pre-disconnect connection state and backend disconnect-call duration to
+  existing bounded diagnostic events, including cancelled and skipped calls.
+
 - Follow the observed DJI Home initialization order on connect/reconnect:
   two session requests, authentication, two
   61-byte configuration reads, then two reads each of 0x1001 and 0x1004.

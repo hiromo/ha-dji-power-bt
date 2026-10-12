@@ -100,10 +100,16 @@ This gate exists because reconnecting with a BLEDevice cached before the disconn
 Outer reconnect delays are:
 
 ```text
-10 s, 30 s, 60 s, 120 s, 300 s
+10 s, 20 s, 30 s, 60 s (repeat 60 s on subsequent failures)
 ```
 
-The internal `establish_connection()` retry count is intentionally limited to 2 so retry responsibility is not hidden inside long backend loops.
+The outer runner has no attempt limit while BLE is enabled and the integration
+is running. These are delays after failure/cleanup, not fixed intervals between
+attempt starts; discovery, setup, and lock waits add elapsed time.
+
+`establish_connection()` receives `max_attempts=2`. The dependency may handle
+transient errors with a separate retry budget, so this is not a strict bound
+of two low-level connection attempts.
 
 A successful ready transition resets failure state/backoff progression.
 
