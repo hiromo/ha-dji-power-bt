@@ -118,7 +118,7 @@ def test_public_documentation_is_english_and_user_focused() -> None:
         "completely replaces",
         "dji_power_bt.set_scheduled_energy_settings",
         "separate `0x1016/0x1017` records",
-        "10, 30, 60, 120, and 300 seconds",
+        "10, 20, 30, and 60 seconds",
         "Power 1000 Mini charging mode",
         "/config/.storage/core.config_entries",
         "capturing and analyzing the BLE authentication exchange",

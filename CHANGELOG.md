@@ -9,6 +9,8 @@ notable user impact rather than every internal code change.
 
 ## Unreleased
 
+## 0.7.33 - 2026-10-13
+
 - Shorten reconnect backoff to 10, 20, 30, and at most 60 seconds, continuing
   retries while BLE is enabled and resetting after successful initialization.
 - Add pre-disconnect connection state and backend disconnect-call duration to

@@ -57,7 +57,17 @@ HACS must already be installed.
 3. Open **Settings -> Devices & services -> Add integration** and select
    **DJI Power Bluetooth**.
 
-Install updates from HACS and restart Home Assistant afterward.
+Install updates from HACS and restart Home Assistant afterward. Existing HACS
+users do not need to add the repository again or recreate their integration.
+Updates appear after HACS refreshes repository information; publication is not
+an immediate push to every Home Assistant instance.
+
+Version **0.7.33** improves BLE initialization, keeps ordinary entities unavailable
+until initialization finishes, and caps reconnect backoff at 60 seconds.
+Setting actions invoked before readiness fail rather than being queued.
+Existing configuration entries and entity IDs are preserved. See the
+[changelog](CHANGELOG.md) for details and the
+[release procedure](docs/implementation/releasing.md) for maintainer instructions.
 
 ### Manual installation
 

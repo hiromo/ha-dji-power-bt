@@ -57,8 +57,8 @@ identifiers, authentication data, or complete diagnostic dump is stored here.
 
 **Observed app display:**
 
-- `バッテリーのメンテナンス中です。今回は100%まで充電します`
-- `メンテナンス充電`, with Energy Saver shown unavailable during maintenance.
+- "Battery maintenance is in progress. This time it will charge to 100%" (English translation)
+- "Maintenance charging" (English translation), with Energy Saver shown unavailable during maintenance.
 - 70% SoC, 33.1 C, 1 h 3 min remaining, total and AC input both 1,497 W.
 
 **Observed latest diagnostic:** 70% aggregate SoC, 33.1 C, 70 minutes
