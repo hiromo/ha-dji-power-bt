@@ -19,7 +19,7 @@ not a proven cause of the captured reconnect failures.
 
 ## Decision
 
-- Keep two session requests, key authentication, two 61-byte GETs, two 0x1001
+- Keep two session requests, key authentication, one 61-byte GET, two 0x1001
   GETs, and two 0x1004 GETs, on initial connection and reconnect.
 - Remove the mandatory 0x62 wait and its timeout. Start reads after authentication;
   do not introduce an unproven 0x61 wait as a replacement.
@@ -39,3 +39,11 @@ premature setting calls are visible errors; callers may retry after readiness.
 Behavior tests cover report-present/absent startup, reconnect, every GET failure,
 ACKs, cancellation/disconnect, premature service calls, and entity publication.
 Real-device reconnect recovery after this revision remains unvalidated.
+
+## Broad-read count revision (2026-10-16)
+
+By operator decision, all models now issue the unchanged 61-byte broad GET
+once on initial connection and reconnect. The app duplicate remains an observed
+behavior, not a proven requirement. Short reads remain duplicated, and request
+matching, readiness, ACKs, and reconnect safeguards are unchanged. This is a
+controlled reduction of startup traffic, not a proven fix for Mini disconnects.

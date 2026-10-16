@@ -4,7 +4,7 @@ This historical engineering record is not a current specification. Topical
 documents under `docs/` define current behavior; for example, v0.7.5 replaced
 v0.7.3's `grid_port` interpretation with AC inlet/outlet semantics.
 
-Current public release: integration `v0.7.32`. The public compatibility baseline
+Current public release: integration `v0.7.34`. The public compatibility baseline
 remains config-entry version `1` from `v0.7.31`.
 
 ## v0.7.32

@@ -302,9 +302,8 @@ class ManagerTransportMixin:
         _LOGGER.debug("DJI Power protocol authentication succeeded for %s", self.address)
 
     async def _read_initial_config(self) -> PowerConfig:
-        for _ in range(2):
-            cfg = await self._read_current_config()
-            self._apply_config(cfg, source="0x60_initial", notify=False)
+        cfg = await self._read_current_config()
+        self._apply_config(cfg, source="0x60_initial", notify=False)
         for payload in (b"\x00\x01\x10", b"\x00\x04\x10"):
             for _ in range(2):
                 self.state.config_read_request_count += 1

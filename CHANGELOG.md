@@ -9,6 +9,12 @@ notable user impact rather than every internal code change.
 
 ## Unreleased
 
+## 0.7.34 - 2026-10-16
+
+- Reduce the broad 61-byte configuration read from two requests to one on
+  initial connection and reconnect for all models. Keep both short table reads
+  duplicated; real-device recovery improvement remains unvalidated.
+
 ## 0.7.33 - 2026-10-13
 
 - Shorten reconnect backoff to 10, 20, 30, and at most 60 seconds, continuing

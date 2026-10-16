@@ -86,7 +86,7 @@ def test_observed_get_bytes():
     assert frame.length == 74 and frame.header_crc_ok and frame.crc16_ok
 
 
-@pytest.mark.parametrize("model", [0x94, 0x98])
+@pytest.mark.parametrize("model", [0x91, 0x94, 0x97, 0x98, 0xFF])
 @pytest.mark.parametrize("report", [False, True])
 def test_startup_without_report_barrier_and_reconnect(model, report):
     async def scenario():
@@ -97,21 +97,21 @@ def test_startup_without_report_barrier_and_reconnect(model, report):
             prepare(item, station)
             await item._connect_auth_and_init()
             await asyncio.sleep(0)
-            assert [f.cmd_id for f in station.sent if f.cmd_id != 0x62] == [0x6A]*3 + [0x60]*6
+            assert [f.cmd_id for f in station.sent if f.cmd_id != 0x62] == [0x6A]*3 + [0x60]*5
             assert [f.payload for f in station.sent if f.cmd_id == 0x60] == [
-                APP_GET, APP_GET, b"\0\x01\x10", b"\0\x01\x10",
+                APP_GET, b"\0\x01\x10", b"\0\x01\x10",
                 b"\0\x04\x10", b"\0\x04\x10"]
             assert sum(f.cmd_id == 0x62 for f in station.sent) == int(report)
             assert item.is_ready
             assert item.state.config.tlv_1005_value == bytes(24)
-            assert item.state.config_read_request_count == 6 * (attempt + 1)
+            assert item.state.config_read_request_count == 5 * (attempt + 1)
             assert all("6a" not in k.lower() for k in item._latest_payloads)
             await item.async_disconnect(reason="test")
             assert not item.is_ready
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("failure", ["auth", 1, 2, 3, 4, 5, 6])
+@pytest.mark.parametrize("failure", ["auth", 1, 2, 3, 4, 5])
 def test_failed_startup_never_ready_and_cleans_up(failure):
     async def scenario():
         item = base.make_manager()
@@ -140,7 +140,7 @@ def test_initialization_buffers_reports_blocks_controls_and_keeps_ack(action):
         original = station.write_gatt_char
         async def blocked_write(uuid, raw, response):
             f = protocol.parse_duml_frame(raw)
-            if f.cmd_id == 0x60 and station.gets == 5:
+            if f.cmd_id == 0x60 and station.gets == 4:
                 reached.set()
                 await release.wait()
             await original(uuid, raw, response)

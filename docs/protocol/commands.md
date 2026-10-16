@@ -23,10 +23,12 @@ for exact bytes. It replaces the historical 48-byte literal, whose incomplete
 final selector remains a hypothesis for earlier reconnect trouble.
 
 At initial connection and every reconnect, after authentication the manager
-reads the broad request twice without waiting for 0x62,
+reads the broad request once without waiting for 0x62,
 then reads `00 01 10` twice and `00 04 10` twice. Each request has a new sequence
-and waits for its matching response before the next request. Duplicate reads
-reproduce the observed app sequence; their necessity is not established.
+and waits for its matching response before the next request. Only the short
+reads remain duplicated as observed in the app. By operator
+decision on 2026-10-16, all models use one broad read to reduce duplicate
+startup traffic; improved disconnect recovery has not been validated.
 Ordinary refresh/readback still performs one broad read.
 
 Each broad reply is applied as a configuration snapshot. The short replies

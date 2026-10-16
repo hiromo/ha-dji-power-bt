@@ -73,7 +73,7 @@ A domain runtime shared by all DJI Power entries owns the connection-operation l
 `manager_transport.py`
 : DUM-like request/response transport, GATT writes, authentication, configuration reads, unsolicited command handling, write ACK processing, cache use, write verification, and 0x62 ACKs.
 
-Authentication is followed by six sequential app-style GETs without a mandatory
+Authentication is followed by five sequential GETs (one broad and four short reads) without a mandatory
 0x62 or 0x61 wait. Reports are parsed and ACKed throughout initialization.
 `is_ready` requires BLE enabled, connected, authenticated, and phase `ready`.
 Ordinary controls and entity publication use this boundary; internal protocol

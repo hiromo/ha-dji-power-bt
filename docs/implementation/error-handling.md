@@ -68,7 +68,7 @@ Capture the setup phase before an unexpected-disconnect callback resets it to
 
 ## Request timeout
 
-Initial setup does not require a 0x62 report. All six initial GETs use the normal
+Initial setup does not require a 0x62 report. All five initial GETs use the normal
 request/write deadlines; authentication or GET failure aborts setup. Report ACKs
 remain best-effort during both initialization and normal operation. Backend write
 timeouts still mark the active transport unhealthy through the existing path.

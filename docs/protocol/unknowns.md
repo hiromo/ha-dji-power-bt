@@ -108,8 +108,10 @@ are only 24 bytes, so replacing the broad request with short sweeps alone is
 not justified. In the October 9 capture, the first report/ACK precedes GET in all successful app sessions;
 HA formerly started GET immediately after authentication. Timing remains a
 separate causal hypothesis. The current implementation follows the observed
-app read sequence by explicit operator decision: exact 61-byte GET, duplicate
-reads, and separate 0x1001/0x1004 requests. The later capture led to removal
+app request bytes by explicit operator decision: exact 61-byte GET and separate
+0x1001/0x1004 requests. Since 2026-10-16, all models use one broad GET on
+connect/reconnect while retaining two reads of each short request. This reduces
+duplicate startup traffic; its effect on disconnect/recovery is unvalidated. The later capture led to removal
 of the report/ACK barrier; first-0x61 gating remains unproven. Recovery on real
 hardware after this change has not yet been validated.
 See the [detailed comparison and controlled experiments](../implementation/app-reconnect-comparison-2026-10-12.md).
