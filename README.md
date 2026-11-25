@@ -148,6 +148,11 @@ On verified Power 2000 firmware in `scheduled` mode:
 Firmware may change this behavior. Validate power flow before unattended,
 high-power use.
 
+On the **Power Auro 2000 Elite**, DJI Home's **Recharging Power** sets the
+battery charging power. During bypass, AC input includes both bypass output
+and battery charging power. If **Off-peak charging power** is set and active
+for the current scheduled period, it limits their combined AC input.
+
 ### Tariff schedule
 
 The **Set all-day off-peak tariff** and **Set all-day peak tariff** buttons call

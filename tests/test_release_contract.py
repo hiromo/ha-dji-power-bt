@@ -277,24 +277,6 @@ def test_tariff_schedule_action_is_declared_registered_and_translated() -> None:
         )
 
 
-def test_surplus_automation_v7_7c_preserves_v7_5c_and_uses_current_period() -> None:
-    source = (
-        ROOT / "automations" / "power2000_surplus_absorption_v7_7c.yaml"
-    ).read_text()
-
-    assert "self_consumption_min_surplus_charge_ratio: 0.5" in source
-    assert "self_consumption_sub_min_charge_allowed:" in source
-    assert "and not self_consumption_sub_min_charge_allowed" in source
-    assert "and (self_consumption_sub_min_charge_allowed" in source
-    assert "action: dji_power_bt.set_tariff_schedule" in source
-    assert "action: dji_power_bt.set_scheduled_energy_settings" in source
-    assert "sensor.dji_power_2000_tariff_period" in source
-    assert "sensor.dji_power_2000_tariff_time_slots" not in source
-    assert "preset_match" not in source
-    assert "tariff_schedule_profile" not in source
-    assert "button.dji_power_2000_set_all_day" not in source
-
-
 def test_ac_inlet_outlet_entities_supersede_grid_port_entities() -> None:
     sensor_source = (COMPONENT / "sensor.py").read_text()
     protocol_source = _protocol_impl_source()

@@ -198,6 +198,27 @@ integration writes the confirmed settings and evaluates the reported tariff
 table for Home Assistant display; it does not emulate these power-flow rules.
 Revalidate after firmware changes before relying on them for unattended loads.
 
+### Power 2000 off-peak input below the reported minimum
+
+**Observed** on one Power 2000 with firmware `01.00.1500` on 2026-11-25.
+At 8% SoC with zero output, the station drew 15–16 W before the test.
+A one-off HA test selected all-day off-peak and sent a single `0x1018`
+update enabling off-peak charging and requesting 300 W. The station's
+reported minimum and maximum remained 600 W and 1500 W.
+
+With the station temporarily excluded from HA surplus allocation, the
+immediate `0x60` readback showed 300 W. At both 30 and 150 seconds it
+showed 1050 W (the midpoint), with charging still enabled. AC inlet
+power reached 306 W at 10 seconds and stayed within 298–302 W at every
+10-second sample from 20 through 150 seconds. Total output stayed at
+zero and reported SoC stayed at 8%. Battery-side power was not measured.
+With allocation enabled in the first run, the reported setting had
+returned to 600 W and charging was disabled by the 30-second readback.
+
+The test established neither a minimum charging headroom under load nor
+persistence over reconnection. A future override needs to distinguish the
+requested wattage, the device-reported setting, and measured AC input.
+
 ### Observed Power 2000 ultralow-SoC recovery cycle
 
 **Observed in one diagnostic sequence; broader behavior is reported field
@@ -260,6 +281,14 @@ When adding a model:
 5. enable writes only after full-table safety is understood;
 6. add model-specific protocol tests;
 7. update this file and `unknowns.md` in the same change.
+
+## Power Auro 2000 Elite charging during bypass
+
+**Observed** on a user's Power Auro 2000 Elite (2026-11-25). DJI Home's
+**Recharging Power** setting controls power used to charge the battery. During
+bypass, total AC input is the sum of bypass output and battery charging power.
+When **Off-peak charging power** is set and active for the current scheduled
+period, it caps that sum. Bypass output therefore counts toward the limit.
 
 ## Auro 2000 Elite and Mini port controls
 
