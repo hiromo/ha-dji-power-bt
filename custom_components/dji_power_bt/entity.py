@@ -14,10 +14,11 @@ class DjiPowerEntity(Entity):
 
     _attr_has_entity_name = True
 
-    def __init__(self, manager: DjiPowerManager, key: str, name: str) -> None:
+    def __init__(self, manager: DjiPowerManager, key: str, name: str | None) -> None:
         self.manager = manager
         self._key = key
-        self._attr_name = name
+        if name is not None:
+            self._attr_name = name
         self._attr_unique_id = f"{manager.address}_{key}".replace(":", "_").lower()
         self._remove_listener: Callable[[], None] | None = None
 

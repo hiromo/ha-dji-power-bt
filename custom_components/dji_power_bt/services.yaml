@@ -113,3 +113,27 @@ set_tariff_schedule:
               required: true
               selector:
                 time: {}
+            price:
+              label: Price per kWh
+              required: false
+              selector:
+                number:
+                  mode: box
+                  min: 0
+                  max: 429496.7295
+                  step: 0.0001
+    flat_rate_electricity_price:
+      required: false
+      selector:
+        number:
+          mode: box
+          min: 0
+          max: 429496.7295
+          step: 0.0001
+    currency:
+      required: false
+      selector:
+        select:
+          options:
+            - EUR
+            - GBP

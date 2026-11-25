@@ -15,8 +15,7 @@ DUM framing. All 18 app GET frames rebuild byte-for-byte with the current
 builder. Android negotiates MTU 517; connection updates reach 48.75 ms interval,
 zero peripheral latency, and 5,000 ms supervision timeout. The supplied HA
 diagnostics do not retain comparable negotiated parameters, so these are app
-observations, not established HA/app mismatches. See the
-[reconnect comparison](../implementation/app-reconnect-comparison-2026-10-12.md).
+observations, not established HA/app mismatches.
 
 ## Notification boundaries are not frame boundaries
 
@@ -107,3 +106,16 @@ Home Wi-Fi and cloud access do not conflict with this BLE discovery path.
 Use Home Assistant's Bluetooth stack and the `bluetooth` / `bluetooth_adapters` integration dependencies. Do not pin a second `bleak-retry-connector` requirement in this custom integration.
 
 See ADR `0006-use-home-assistant-bluetooth-dependencies.md`.
+
+## Auro and Mini disconnection in DJI Home
+
+**Observed, November 24, 2026 (23:35 Pixel HCI capture, JST).** Four Auro
+sessions ending at 23:25:36, 23:27:51, 23:30:04 and 23:33:29, and the Mini
+session ending at 23:34:17, showed an ATT write of `01 00` to handle 0x0039
+to enable notifications. None showed a corresponding `00 00` write before
+the HCI disconnection-complete event (reason 0x16, local host).
+
+HA performs best-effort `stop_notify(C305)` during intentional cleanup of a
+connected client. The phone capture observes DJI Home's connection; it
+cannot establish how the station responds to HA's unsubscribe or attribute
+the operator's occasional Mini reconnect failures to it.

@@ -62,73 +62,7 @@ This looks flag-like but the parent record meaning is unresolved. Do not use it 
 
 ## Returned configuration-key set
 
-### Configuration GET grammar and recovery
-
-**Latest evidence, October 12 evening:** the broad/short GET bytes are unchanged,
-but a successful Mini session sends GETs after 0x61 and before 0x62. Another
-session on the same Mini has 0x62 first; their initial telemetry bodies match.
-First 0x61 precedes GET in all six successful sessions across both captures,
-making telemetry-driven readiness a candidate, not a proven trigger. A fixed
-model/state-flag branch is not established. See the
-[new capture analysis](../implementation/app-startup-order-2026-10-12-capture.md).
-
-The earlier HA snapshots show successful Power 2000 recovery but continuing
-Mini failure before GET. The former mandatory 0x62 wait could not reproduce all
-app paths. Unknowns now include first-notification readiness, a bounded fallback
-when neither report nor telemetry arrives, and transport-level disconnect causes.
-
-**Observed in source and synthetic wire execution, not a new device capture:**
-the historical GET literal was 48 bytes, beginning `00 00 10 02 10 03` and ending
-`10 23 10 24 10 25`. The zuyan9 implementation at commit
-`4682acbef33bfb9b4734818cc640f59dbd7c2758` instead sends two GET payloads,
-`00 01 10` and `00 04 10`, called module sweeps there.
-
-**Hypothesis:** a one-byte operation prefix followed by little-endian 16-bit
-selectors would interpret the other requests as `0x1001` and `0x1004`. Applying
-that grammar to our literal gives 23 complete selectors plus an unmatched
-trailing byte `25`. The historical two-byte source-code grouping is not evidence
-against that interpretation, but neither implementation documents a complete
-device-validated GET grammar. Do not treat this as a confirmed malformed packet
-or infer the necessary repair byte.
-
-**Unknown:** whether selector type, missing terminator, requested records, or
-GET mode affects the station's session/reporting state; whether any difference
-explains recovery after DJI Home. The September diagnostics repeatedly fail
-after authentication during the initial GET, making this a useful controlled
-comparison. Compare DJI Home GETs and replies on the same firmware, then test
-one request mode at a time without changing ACK policy or connection parameters.
-Preserve unknown returned records and existing write safety checks.
-
-**Observed update, October 9 Android capture analyzed October 12:** DJI Home
-sends a 61-byte broad request twice, then each short request twice, on both
-models. Its broad request fits `00 + 30 little-endian selectors`. This strengthens
-the **Inferred** grammar and missing final `10` hypothesis for HA's 48-byte
-literal; it does not prove the cause of reconnect failure. Mini's short replies
-are only 24 bytes, so replacing the broad request with short sweeps alone is
-not justified. In the October 9 capture, the first report/ACK precedes GET in all successful app sessions;
-HA formerly started GET immediately after authentication. Timing remains a
-separate causal hypothesis. The current implementation follows the observed
-app request bytes by explicit operator decision: exact 61-byte GET and separate
-0x1001/0x1004 requests. Since 2026-10-16, all models use one broad GET on
-connect/reconnect while retaining two reads of each short request. This reduces
-duplicate startup traffic; its effect on disconnect/recovery is unvalidated. The later capture led to removal
-of the report/ACK barrier; first-0x61 gating remains unproven. Recovery on real
-hardware after this change has not yet been validated.
-See the [detailed comparison and controlled experiments](../implementation/app-reconnect-comparison-2026-10-12.md).
-
-The other implementation also omits our conditional `0x62/0x40` ACK.
-The October 9 capture now establishes that DJI Home does send `0x62/0x80`
-with payload `01` for all 22 observed reports. Whether continuous ACK handling
-affects long-session station behavior remains a separate question.
-See the [comparison and change review](../implementation/ble-comparison-and-review-2026-09-11.md).
-
-### Returned records
-
-**Observed and strongly informative**
-
-Power 2000 and Power 1000 Mini return different subsets of requested 0x60 keys. This may be a better long-term capability-discovery mechanism than static model tables, but safe semantics for every key are not yet known.
-
-Future work should record `keys_seen` in diagnostics without changing write behavior, then compare across firmware and models.
+Power 2000 and Mini return different subsets of the requested keys. Presence alone does not establish that a setting is writable. The effect of GET timing on reconnect failures remains unknown. See [startup decisions](../decisions/0008-follow-observed-app-initialization.md).
 
 ## Unresolved Mini keys
 
@@ -373,3 +307,18 @@ When resolving an item:
 5. add parser/builder behavior tests;
 6. move the confirmed meaning to the appropriate protocol document;
 7. leave a short note here describing what evidence resolved it.
+
+## Auro tariff and charging-power follow-up
+
+The operator verified both all-day presets. The November 25 BLE trial
+verified both separate and combined writes of normal price/currency and priced
+periods by ACK, fresh periodic reports and Wi-Fi app display. See
+[commands](commands.md#auro-configuration-writes) and
+[wire format](packet-format.md#auro-energy-and-tariff-records). Bounds,
+other currency codes, atomicity on partial failure and persistence after cycling station
+power remain unverified. **Observed:** in the Bluetooth-only app session the
+daily times remained visible, while the prices showed as unconfigured and
+the currency was blank. The operator reported a server error roughly 30
+seconds after opening the screen. The Wi-Fi view showed prices and currency.
+**Unknown:** the cause of the app error and its own Save command sequence. The low/fast reference
+values in 0x1026 are inferred and are preserved unchanged.

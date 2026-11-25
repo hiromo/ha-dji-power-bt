@@ -1202,3 +1202,165 @@ def test_manager_diagnostics_snapshot_uses_precise_connection_semantics_and_shar
         )
 
     asyncio.run(scenario())
+
+
+def test_auro_energy_setting_ack_and_device_verification() -> None:
+    import pytest
+    from dataclasses import replace
+    from homeassistant.exceptions import HomeAssistantError
+
+    async def scenario():
+        p = sys.modules["custom_components.dji_power_bt.protocol"]
+        m = make_manager()
+        m.model_code = 0x9E
+        m.state.connected = m.state.authenticated = True
+        m.state.connection_phase = "ready"
+        header = p.build_keyed_header(timestamp_ms=1)
+
+        def report(on):
+            return p.parse_power_config(header + bytes((0x21, 0x10, 3, 0, 1, 1 if on else 2, 9)),
+                                        source_cmd_id=0x62)
+
+        m._apply_config(report(False), source="0x62")
+        status = 1
+        async def request(*, cmd_id, payload):
+            assert cmd_id == 0x63
+            assert payload[32:] == bytes.fromhex("21 10 03 00 01 01 09")
+            return types.SimpleNamespace(payload=header + bytes.fromhex("21 10 04 00")
+                                         + status.to_bytes(4, "little"), seq=10)
+        m._request = request
+        with pytest.raises(HomeAssistantError):
+            await m.async_set_energy_setting(0x1021, True)
+        assert m.state.config.energy_switch(0x1021) is False
+        assert not m._pending_verifications
+        status = 0
+        await m.async_set_energy_setting(0x1021, True)
+        m._apply_config(report(False), source="0x62")
+        assert m._pending_verifications
+        m._apply_config(report(True), source="0x62")
+        assert m.state.reflection_confirmed and not m._pending_verifications
+
+        m._apply_config(report(False), source="0x62")
+        await m.async_set_energy_setting(0x1021, True)
+        pending, = m._pending_verifications.values()
+        pending.policy = replace(pending.policy, wait_for_report_s=0)
+        async def read():
+            return report(True)
+        m._read_current_config = read
+        await m._verification_tasks[pending.key]
+        assert m.state.verification_readback_count == 1
+        assert m.state.reflection_confirmed
+
+    asyncio.run(scenario())
+
+
+def test_auro_schedule_requires_complete_table_and_verifies_unset_price() -> None:
+    import pytest
+    from homeassistant.exceptions import HomeAssistantError
+
+    async def scenario() -> None:
+        p = sys.modules["custom_components.dji_power_bt.protocol"]
+        m = make_manager()
+        m.model_code = 0x9E
+        m.capabilities = manager_mod.capabilities_for_model_code(m.model_code)
+        m.state.connected = m.state.authenticated = True
+        m.state.connection_phase = "ready"
+        header = p.build_keyed_header(timestamp_ms=1)
+        row = bytes.fromhex("01 01 7f 00 00 00 07 0d 09 2f")
+        periods = [{"tariff": "peak", "weekdays": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+                    "start_time": "07:13", "end_time": "09:47"}]
+
+        def report(price_bytes):
+            payload = header + bytes.fromhex("16 10 13 00 17 10 0f 00") + row + price_bytes
+            return p.parse_power_config(payload, source_cmd_id=0x62)
+
+        bad = report(bytes.fromhex("01 00 00 00 02"))
+        m._apply_config(bad, source="0x62")
+        async def read():
+            return bad
+        m._read_current_config = read
+        with pytest.raises(HomeAssistantError, match="Complete Auro tariff table"):
+            await m.async_set_tariff_schedule(periods=periods)
+
+        priced = bytes.fromhex("33 0c 00 00 01")
+        m._apply_config(report(priced), source="0x62")
+        writes = []
+        async def send(*, cmd_id, payload):
+            writes.append(cmd_id)
+            assert payload[32:] == bytes.fromhex("16 10 13 00 16 00 0f 00") + row + bytes(5)
+            return types.SimpleNamespace(payload=header + bytes.fromhex("16 10 04 00 00 00 00 00"), seq=1)
+        m._request = send
+        await m.async_set_tariff_schedule(periods=periods)
+        m._apply_config(report(priced), source="0x62")
+        assert m._pending_verifications
+        m._apply_config(report(bytes(5)), source="0x62")
+        assert m.state.reflection_confirmed and not m._pending_verifications
+        await m.async_set_tariff_schedule(periods=periods)
+        assert writes == [0x63]
+
+    asyncio.run(scenario())
+
+
+def test_auro_combined_tariff_verifies_both_properties_and_partial_ack() -> None:
+    import pytest
+    from homeassistant.exceptions import HomeAssistantError
+
+    async def scenario():
+        protocol = sys.modules["custom_components.dji_power_bt.protocol"]
+        m = make_manager()
+        m.state.connected = m.state.authenticated = True
+        m.state.connection_phase = "ready"
+        period = {"tariff": "peak", "weekdays": ["mon"], "start_time": "07:13",
+                  "end_time": "09:47", "price": 0}
+        flat = bytes.fromhex("02 3c 0b 00 00 01")
+        header = protocol.build_keyed_header(timestamp_ms=1)
+        row = bytes.fromhex("01 02 01 00 00 00 07 0d 09 2f")
+        def tlv(key, value):
+            return key.to_bytes(2, "little") + len(value).to_bytes(2, "little") + value
+        def report(price_set, flat_record):
+            table = tlv(0x1017, row + bytes(4) + bytes([price_set]))
+            body = tlv(0x1016, table)
+            if flat_record is not None:
+                body += tlv(0x102A, flat_record)
+            return protocol.parse_power_config(header + body, source_cmd_id=0x62)
+
+        with pytest.raises(HomeAssistantError, match="Period prices require Auro"):
+            await m.async_set_tariff_schedule(periods=[period])
+        m.model_code = 0x9E
+        m.capabilities = manager_mod.capabilities_for_model_code(m.model_code)
+        for fields in ({"currency": "GBP"}, {"flat_rate_electricity_price": 0}):
+            with pytest.raises(HomeAssistantError, match="together"):
+                await m.async_set_tariff_schedule(periods=[period], **fields)
+        calls = []
+        status = None
+        async def send(*, cmd_id, payload):
+            calls.append(cmd_id)
+            assert payload[32:] == tlv(0x102A, flat) + tlv(0x1016, tlv(0x0016, row + bytes(4) + b"\x01"))
+            ack = tlv(0x1016, bytes(4))
+            if status is not None:
+                ack += tlv(0x102A, status.to_bytes(4, "little"))
+            return types.SimpleNamespace(payload=header + ack, seq=len(calls))
+        m._request = send
+        async def write():
+            await m.async_set_tariff_schedule(periods=[period], flat_rate_electricity_price="0.2876", currency="GBP")
+
+        for status in (None, 1):
+            m._apply_config(report(False, None), source="0x62")
+            with pytest.raises(HomeAssistantError, match="write failed"):
+                await write()
+            assert not m._pending_verifications
+            assert m.state.config.tariff_slots[0].price_units is None
+
+        status = 0
+        m._apply_config(report(False, None), source="0x62")
+        await write()
+        assert not next(iter(m._pending_verifications.values())).policy.allow_readback
+        for cfg in (report(True, None), report(False, flat), report(True, b"\x01" + flat[1:])):
+            m._apply_config(cfg, source="0x62")
+            assert m._pending_verifications
+        m._apply_config(report(True, flat), source="0x62")
+        assert m.state.reflection_confirmed and not m._pending_verifications
+        await write()
+        assert calls == [0x63] * 3
+
+    asyncio.run(scenario())

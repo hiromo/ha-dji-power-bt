@@ -68,7 +68,24 @@ def _port_power(key: str, name: str, value_fn, supported_fn) -> SensorDescriptio
     )
 
 
+def _charging_power_limit(key: str, name: str, field: str) -> SensorDescription:
+    def read(manager: DjiPowerManager) -> int | None:
+        cfg = manager.state.config
+        power = cfg.charging_power if cfg else None
+        return getattr(power, field) if power else None
+
+    return _power(
+        key, name, read,
+        supported_fn=lambda m: m.model_code == 0x9E,
+        enabled_default=False, entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=None,
+    )
+
+
 SENSORS: tuple[SensorDescription, ...] = (
+    _charging_power_limit("charging_power_min", "Charging power minimum", "minimum"),
+    _charging_power_limit("charging_power_max", "Charging power maximum", "maximum"),
+    _charging_power_limit("charging_power_step", "Charging power step", "step"),
     SensorDescription(
         key="soc",
         name="SoC",

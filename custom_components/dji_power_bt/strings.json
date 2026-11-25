@@ -188,6 +188,14 @@
           "name": "DJI Power device",
           "description": "The physical DJI Power device to configure."
         },
+        "flat_rate_electricity_price": {
+          "name": "Flat-rate electricity price",
+          "description": "Auro only. Price per kWh outside the configured periods. Supply together with currency."
+        },
+        "currency": {
+          "name": "Currency",
+          "description": "Auro only. Currency for electricity prices. Supply together with the flat-rate electricity price."
+        },
         "preset": {
           "name": "Preset",
           "description": "Replace the complete schedule with a verified all-day peak or all-day off-peak preset. Do not specify periods at the same time."
@@ -218,6 +226,22 @@
       },
       "set_all_day_off_peak_tariff": {
         "name": "Set all-day off-peak tariff"
+      }
+    },
+    "number": {
+      "charging_power": {
+        "name": "Charging power"
+      }
+    },
+    "switch": {
+      "low_battery_alarm": {
+        "name": "Low battery alarm"
+      },
+      "ac_output_auto_restore": {
+        "name": "AC output auto-restore"
+      },
+      "ac_charging_cable_safety_check": {
+        "name": "AC charging cable safety check"
       }
     }
   }

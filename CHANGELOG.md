@@ -1,7 +1,7 @@
 # Changelog
 
 This file records user-visible changes to public releases of DJI Power
-Bluetooth. Detailed pre-public engineering history remains in
+Bluetooth. Development milestones and the public compatibility baseline are in
 [`docs/release-history.md`](docs/release-history.md).
 
 The project follows the principle of keeping a changelog: entries describe

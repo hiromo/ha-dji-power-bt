@@ -23,11 +23,12 @@ MIN_TELEMETRY_UPDATE_INTERVAL = 1
 MAX_TELEMETRY_UPDATE_INTERVAL = 60
 
 DJI_COMPANY_ID = 0x08AA
-KNOWN_MODEL_CODES = frozenset({0x91, 0x94, 0x97, 0x98})
+KNOWN_MODEL_CODES = frozenset({0x91, 0x94, 0x97, 0x98, 0x9E})
 MODEL_NAMES: dict[int, str] = {
     0x91: "DJI Power 1000",
     0x94: "DJI Power 2000",
     0x97: "DJI Power 1000 V2",
+    0x9E: "DJI Power Auro 2000 Elite",
     0x98: "DJI Power 1000 Mini",
 }
 
@@ -50,6 +51,9 @@ ATTR_MAX_FRAMES = "max_frames"
 ATTR_PRESET = "preset"
 ATTR_PERIODS = "periods"
 ATTR_TARIFF = "tariff"
+ATTR_PRICE = "price"
+ATTR_FLAT_RATE_ELECTRICITY_PRICE = "flat_rate_electricity_price"
+ATTR_CURRENCY = "currency"
 ATTR_WEEKDAYS = "weekdays"
 ATTR_START_TIME = "start_time"
 ATTR_END_TIME = "end_time"

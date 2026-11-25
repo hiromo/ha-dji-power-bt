@@ -21,6 +21,8 @@ class SwitchDescription:
     set_fn: Callable[[DjiPowerManager, bool], object]
     icon: str | None = None
     device_class: SwitchDeviceClass | None = None
+    initial_enabled: bool = True
+    translated: bool = False
     available_when_disconnected: bool = False
     supported_fn: Callable[[DjiPowerManager], bool] | None = None
     available_fn: Callable[[DjiPowerManager], bool] | None = None
@@ -96,11 +98,52 @@ SWITCHES: tuple[SwitchDescription, ...] = (
 )
 
 
+def _individual_switches(manager: DjiPowerManager) -> list[SwitchDescription]:
+    if manager.model_code not in (0x98, 0x9E):
+        return []
+    caps = manager.capabilities
+    switches = []
+    for key, label, kind, count in (
+        ("usb_a", "USB-A", 3, caps.usb_a_ports),
+        ("usb_c", "USB-C", 4, caps.usb_c_ports),
+        ("sdc", "SDC", 5, caps.sdc_ports if manager.model_code == 0x9E else 0),
+    ):
+        for port in range(1, count + 1):
+            switches.append(SwitchDescription(
+                key=f"{key}_{port}", name=f"{label}{port}",
+                is_on_fn=lambda m, k=kind, p=port: _port_state(m, k, p),
+                set_fn=lambda m, on, k=kind, p=port: m.async_set_output_interface_enabled(
+                    interface_type=k, port_index=p, enabled=on
+                ),
+                initial_enabled=False,
+            ))
+    for key, label, record_id in (
+        ("low_battery_alarm", "Low battery alarm", 0x1021),
+        ("ac_output_auto_restore", "AC output auto-restore", 0x101C),
+        ("ac_charging_cable_safety_check", "AC charging cable safety check", 0x101D),
+    ):
+        switches.append(SwitchDescription(
+            key=key, name=label,
+            is_on_fn=lambda m, k=record_id: m.state.config.energy_switch(k) if m.state.config else None,
+            set_fn=lambda m, on, k=record_id: m.async_set_energy_setting(k, on),
+            initial_enabled=False, translated=True,
+        ))
+    return switches
+
+
+def _port_state(manager: DjiPowerManager, kind: int, port: int) -> bool | None:
+    cfg = manager.state.config
+    if cfg is None or not cfg.output_table_write_supported:
+        return None
+    record = cfg.get_output_state(kind, port)
+    return record.enabled if record else None
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
     manager: DjiPowerManager = entry.runtime_data
     async_add_entities(
         DjiPowerSwitch(manager, description)
-        for description in SWITCHES
+        for description in (*SWITCHES, *_individual_switches(manager))
         if description.supported_fn is None or description.supported_fn(manager)
     )
 
@@ -109,8 +152,11 @@ class DjiPowerSwitch(DjiPowerEntity, SwitchEntity):
     """DJI Power switch."""
 
     def __init__(self, manager: DjiPowerManager, description: SwitchDescription) -> None:
-        super().__init__(manager, description.key, description.name)
+        super().__init__(manager, description.key, None if description.translated else description.name)
         self.description = description
+        self._attr_entity_registry_enabled_default = description.initial_enabled
+        if description.translated:
+            self._attr_translation_key = description.key
         if description.icon:
             self._attr_icon = description.icon
         if description.device_class:

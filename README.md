@@ -6,23 +6,19 @@ Energy (BLE). It is not affiliated with or endorsed by DJI.
 
 [![Open this repository in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=hiromo&repository=ha-dji-power-bt&category=integration)
 
+Private development began in early June 2026. The integration is beta-quality.
+
 ## Supported devices
 
 Real-hardware testing covers:
 
 - DJI Power 2000
+- DJI Power Auro 2000 Elite
 - DJI Power 1000 Mini
 
-DJI Power 1000 and 1000 V2 are discoverable by known model codes but expose a
-conservative entity subset because their configuration tables are not fully
-validated. Unknown models use the same policy.
-
-Private development began in early June 2026. Power 2000 and Power 1000 Mini
-have since received sustained Home Assistant testing, including simultaneous
-connections, reconnects, telemetry, and configuration writes. The integration
-is beta-quality and intended for regular use with verified devices. Its
-reverse-engineered protocol and unverified models may require changes after DJI
-firmware updates.
+DJI Power 1000 and DJI Power 1000 V2 also support discovery with a limited
+feature set. See [model differences](docs/protocol/model-differences.md) for
+capabilities and verification by model.
 
 ## Requirements and connection model
 
@@ -117,7 +113,7 @@ private, and encrypt or delete them after recovery.
   input/output telemetry.
 - AC inlet/outlet, USB, SDC, 12 V, and XT60 telemetry when reported.
 - Charge/discharge limits, AC output, and model-specific SDC controls.
-- Power 2000 scheduled-energy and complete tariff-schedule controls.
+- Scheduled-energy settings, all-day tariff presets and detailed tariff schedules on Power 2000 and Power Auro 2000 Elite.
 - Power 1000 Mini charging-mode selection.
 - Sanitized diagnostics and bounded protocol capture without authentication
   traffic.
@@ -125,7 +121,10 @@ private, and encrypt or delete them after recovery.
 Capabilities and the current device mode are checked separately, so an existing
 entity may be unavailable when its operation is invalid in the active mode.
 
-## Power 2000 energy management
+## Energy management
+
+Power 2000 and Power Auro 2000 Elite support the following Energy Saver and
+tariff schedule controls.
 
 ### Supported Energy Saver mode
 
@@ -166,11 +165,13 @@ current schedule.
 
 | Field | Value |
 |---|---|
-| `device_id` | Home Assistant device ID of the target Power 2000 (required) |
+| `device_id` | Home Assistant device ID of the target Power 2000 or Auro 2000 Elite (required) |
 | `preset` | `all_day_peak` or `all_day_off_peak`, applying the selected tariff all day, every day |
-| `periods` | A complete list of 1–64 tariff periods, each containing the required fields below |
+| `periods` | Complete period list. Maximum 64 on Power 2000, 51 on Auro, or 50 on Auro when supplying the flat-rate price and currency |
+| `flat_rate_electricity_price` | Optional Auro flat-rate price per kWh, specified together with `currency` |
+| `currency` | `EUR` or `GBP` on Auro. Omit both fields to keep the device’s flat-rate price and currency |
 
-Each entry in `periods` requires:
+Fields in each `periods` entry:
 
 | Field | Value |
 |---|---|
@@ -178,13 +179,14 @@ Each entry in `periods` requires:
 | `weekdays` | A non-empty list of distinct start days: `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, `sun` |
 | `start_time` | Start time as a quoted `"HH:MM"` string, from `"00:00"` to `"23:59"` |
 | `end_time` | Exclusive end time in the same format |
+| `price` | Optional on Auro. Price per kWh with up to four decimal places. Omit for an unset price, or specify `0` for an explicit zero price |
 
 All-day peak preset example:
 
 ```yaml
 action: dji_power_bt.set_tariff_schedule
 data:
-  device_id: <Power 2000 device ID>
+  device_id: <device ID>
   preset: all_day_peak
 ```
 
@@ -193,7 +195,7 @@ Detailed periods example:
 ```yaml
 action: dji_power_bt.set_tariff_schedule
 data:
-  device_id: <Power 2000 device ID>
+  device_id: <device ID>
   periods:
     - tariff: off_peak
       weekdays: [mon, tue, wed, thu, fri]
@@ -227,7 +229,7 @@ entity calls and intermediate setting combinations.
 ```yaml
 action: dji_power_bt.set_scheduled_energy_settings
 data:
-  device_id: <Power 2000 device ID>
+  device_id: <device ID>
   energy_optimization_mode: scheduled
   peak_discharging: false
   off_peak_charging: true
@@ -240,12 +242,12 @@ actions sequentially when changing both:
 ```yaml
 - action: dji_power_bt.set_tariff_schedule
   data:
-    device_id: <Power 2000 device ID>
+    device_id: <device ID>
     preset: all_day_off_peak
 
 - action: dji_power_bt.set_scheduled_energy_settings
   data:
-    device_id: <Power 2000 device ID>
+    device_id: <device ID>
     energy_optimization_mode: scheduled
     peak_discharging: false
     off_peak_charging: true
@@ -309,7 +311,7 @@ hiromo and contributors.
 - [Public changelog](CHANGELOG.md)
 - [GitHub Releases](https://github.com/hiromo/ha-dji-power-bt/releases)
 - [Engineering documentation](docs/README.md)
-- [Detailed development history](docs/release-history.md)
+- [Development milestones and compatibility baseline](docs/release-history.md)
 
 Topical documents define current behavior; release history records superseded
 implementation details.

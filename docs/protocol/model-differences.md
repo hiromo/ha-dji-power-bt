@@ -8,11 +8,11 @@
 | `0x94` | DJI Power 2000 | primary verified model |
 | `0x97` | DJI Power 1000 V2 | discovery/basic conservative profile; model-specific tables not fully verified |
 | `0x98` | DJI Power 1000 Mini | primary verified model |
+| `0x9E` | DJI Power Auro 2000 Elite | hardware-tested charging power, tariff presets and electricity prices |
 
 Unknown model codes receive a conservative default capability set.
 
-Power 2000 and Power 1000 Mini are the two models currently validated with real
-hardware. Power 1000 and Power 1000 V2 keep conservative profiles until their
+Real-hardware testing covers Power 2000, Power Auro 2000 Elite and Power 1000 Mini. Power 1000 and Power 1000 V2 keep conservative profiles until their
 model-specific configuration and control tables receive equivalent validation.
 
 ## Static capability hints
@@ -78,7 +78,7 @@ It does not use the Power 2000 tariff/off-peak/peak control model.
 telemetry-first/GET-before-report and report-first ordering; Power 2000 retains
 report-first ordering in the available samples. Broad and short GET bytes are
 identical across models. No fixed model-specific startup branch follows from
-this evidence; see the [capture analysis](../implementation/app-startup-order-2026-10-12-capture.md).
+this evidence. See [ADR 0008](../decisions/0008-follow-observed-app-initialization.md).
 
 **Observed and important for future capability discovery**
 
@@ -137,7 +137,10 @@ raw_id 2 -> fast -> nominal 1000 W
 
 The selected state is carried in each record. Prefer these device-reported nominal values to hard-coded UI assumptions.
 
-## Power 2000 0x1018
+## Scheduled-energy settings (0x1018)
+
+Power 2000 reports an 86-byte record and Power Auro 2000 Elite reports a
+103-byte record. Both profiles expose the scheduled-energy controls below.
 
 Current confirmed control fields include scheduled/disabled energy mode, peak-discharge enable, off-peak-charge enable, off-peak charging power and min/max bounds.
 
@@ -257,3 +260,20 @@ When adding a model:
 5. enable writes only after full-table safety is understood;
 6. add model-specific protocol tests;
 7. update this file and `unknowns.md` in the same change.
+
+## Auro 2000 Elite and Mini port controls
+
+**Observed** in the November 24 DJI Home captures and app tests: Auro has two
+USB-A, three USB-C and two SDC ports. Mini has two USB-A, two USB-C and one
+controllable SDC port. Port identities in the output table use interface types
+3, 4 and 5 respectively and one-based indices. Mini keeps its existing SDC
+control. SDC power telemetry describes the group aggregate.
+
+Auro reports a 103-byte scheduled-energy record and a separate 29-byte charging
+power record. In the November 25 HA diagnostics, charging power writes to 1440 W and
+900 W were verified by 0x62. Auro uses a 13-byte realtime battery record
+where Power 2000 uses 12 bytes (see [telemetry](telemetry.md)).
+The operator also verified both tariff presets; separate BLE writes for GBP
+and priced periods, followed by a single combined write, were verified via
+0x62 and the Wi-Fi app display (see [commands](commands.md#auro-configuration-writes)). Mini energy-management
+switches additionally require a matching device-reported record.

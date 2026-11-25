@@ -172,3 +172,30 @@ This is a read-only interpretation, not a write schema. Do not copy the full
 identifier-bearing record into published examples or assume existing payload
 redaction covers this newly observed field. Future diagnostics/parser work
 must account for it explicitly.
+
+## Auro energy and tariff records
+
+**Observed.** The version-1 charging-power record 0x1026 is 29 bytes.
+**Inferred.** Little-endian 32-bit words at offsets 1, 5, 9 and 25 describe
+the increment, minimum, maximum and current charging power in watts. The
+captured limits are 100 W increments from 200 W with a separate 1440 W
+endpoint. DJI Home writes changed the ordinary charging-power setting from
+1000 to 200 to 1440 to 1000 W, while the words at offsets 13 and 17 stayed
+at 1000 and 1440. Their correspondence to the app's slow/fast reference
+levels is **inferred**. Off-peak charging power is separately encoded in
+0x1018. Writes to 0x1026 preserve all bytes outside offsets 25–28.
+
+**Observed.** Auro time rows in 0x1016 use 0x1017 on read. Their first ten
+bytes describe the period as on Power 2000. An unset period price has five
+zero bytes at offsets 10–14. An explicit zero price instead ends in `00 00 00 00 01`.
+In the November 24 23:35 capture, the parser reproduced 07:13–09:47 and
+21:26–23:54 from 50 configuration responses and 30 periodic reports.
+
+**Confirmed for the tested Auro values.** In 0x102A, byte 0 selects the
+currency (1 EUR, 2 GBP), bytes 1–4 hold price per kWh times 10000 as a
+little-endian integer, and byte 5 was 1 for a set price. The GBP 0.2789
+write and periodic readback both contained `02 e5 0a 00 00 01`.
+Inside each 15-byte time row the same price representation occupies bytes
+10–13, with byte 14 set to 1 for an explicit price. The verified daily
+peak 07:13–09:47 at 0.3123 ended in `33 0c 00 00 01`; daily off-peak
+21:26–23:54 at 0.1456 ended in `b0 05 00 00 01`.

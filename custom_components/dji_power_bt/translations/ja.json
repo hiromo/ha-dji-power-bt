@@ -188,6 +188,14 @@
           "name": "DJI Power デバイス",
           "description": "設定対象の DJI Power 実機です。"
         },
+        "flat_rate_electricity_price": {
+          "name": "通常時間帯の電気料金",
+          "description": "Auro 専用。時間帯指定のない区間の kWh 単価。通貨と併せて指定します。"
+        },
+        "currency": {
+          "name": "通貨",
+          "description": "Auro 専用。料金に使用する通貨。通常時間帯の電気料金と併せて指定します。"
+        },
         "preset": {
           "name": "プリセット",
           "description": "料金表全体を確認済みの全日ピークまたは全日オフピーク設定に置き換えます。時間帯一覧と同時には指定できません。"
@@ -218,6 +226,22 @@
       },
       "set_all_day_off_peak_tariff": {
         "name": "全時間帯をオフピーク料金に設定"
+      }
+    },
+    "number": {
+      "charging_power": {
+        "name": "充電電力"
+      }
+    },
+    "switch": {
+      "low_battery_alarm": {
+        "name": "バッテリー残量低下アラーム"
+      },
+      "ac_output_auto_restore": {
+        "name": "AC出力自動復旧"
+      },
+      "ac_charging_cable_safety_check": {
+        "name": "AC充電ケーブル安全確認"
       }
     }
   }

@@ -18,6 +18,13 @@ offset  size  interpretation
 11      1     exported as battery unit count; count scope unresolved
 ```
 
+**Observed on Auro 2000 Elite (0x9E).** Its 13-byte 0x3020 shares the
+SoC, remaining-time and temperature offsets above with the 12-byte Power
+2000 record. The November 25 HA diagnostic decodes to 15%, 5940 minutes
+and 23.8 °C, matching the contemporaneous DJI Home display. The November
+24 capture also contains 577 reports of this length. Byte 12 remains
+unknown and is retained in the raw diagnostic value.
+
 Raw `0x3010`, `0x3020`, and `0x3050` values are retained in diagnostics for high-temperature/charging-inhibit investigation. Do not expose a `charging_allowed` or `inhibit_reason` semantic until the code is confirmed.
 
 The exported field names are `raw_0x3010_hex`, `raw_0x3020_hex`, and

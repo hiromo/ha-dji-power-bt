@@ -51,13 +51,6 @@ restart Home Assistant. Existing users retain their repository registration,
 config entries, credentials, and entity IDs. If no update is visible yet,
 refresh repository information in HACS and inspect the selected version.
 
-## Version 0.7.33 validation scope
-
-BLE startup and retry changes are covered by local behavioral tests. Improved
-recovery on physical stations after these changes is not yet verified.
-The repository also contains separate automation examples; failures in their
-standalone tests must be reported separately from the integration tests.
-
 ## References
 
 - [HACS integration requirements](https://www.hacs.xyz/docs/publish/integration/)

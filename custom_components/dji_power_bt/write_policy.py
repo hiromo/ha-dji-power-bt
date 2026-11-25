@@ -30,6 +30,15 @@ OFF_PEAK_POWER_WRITE_VERIFICATION = WriteVerificationPolicy(
 )
 
 
+# The full 0x60 read can omit 0x102A, so only a periodic report proves
+# that both properties of a combined tariff write were applied.
+PERIODIC_TARIFF_VERIFICATION = WriteVerificationPolicy(
+    allow_readback=False,
+    wait_for_report_s=20.0,
+    timeout_source="passive_0x62_not_observed",
+)
+
+
 def snapshot_is_fresh(
     *,
     last_report_monotonic: float | None,

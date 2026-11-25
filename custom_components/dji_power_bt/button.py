@@ -38,8 +38,8 @@ async def _set_all_day_off_peak_tariff(manager: DjiPowerManager) -> None:
     await manager.async_set_tariff_schedule(preset="all_day_off_peak")
 
 
-def _supports_power_2000_tariff_presets(manager: DjiPowerManager) -> bool:
-    return manager.model_code == 0x94 and manager.capabilities.has_tariff_slots
+def _supports_tariff_presets(manager: DjiPowerManager) -> bool:
+    return manager.model_code in (0x94, 0x9E) and manager.capabilities.has_tariff_slots
 
 
 BUTTONS: tuple[ButtonDescription, ...] = (
@@ -58,7 +58,7 @@ BUTTONS: tuple[ButtonDescription, ...] = (
         "mdi:weather-night",
         enabled_default=False,
         entity_category=EntityCategory.CONFIG,
-        supported_fn=_supports_power_2000_tariff_presets,
+        supported_fn=_supports_tariff_presets,
         available_fn=lambda m: m.tariff_preset_control_available,
         translation_key="set_all_day_peak_tariff",
     ),
@@ -69,7 +69,7 @@ BUTTONS: tuple[ButtonDescription, ...] = (
         "mdi:weather-sunny-alert",
         enabled_default=False,
         entity_category=EntityCategory.CONFIG,
-        supported_fn=_supports_power_2000_tariff_presets,
+        supported_fn=_supports_tariff_presets,
         available_fn=lambda m: m.tariff_preset_control_available,
         translation_key="set_all_day_off_peak_tariff",
     ),

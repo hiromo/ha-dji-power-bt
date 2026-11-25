@@ -88,11 +88,14 @@ NUMBERS: tuple[NumberDescription, ...] = (
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities) -> None:
     manager: DjiPowerManager = entry.runtime_data
-    async_add_entities(
+    entities = [
         DjiPowerNumber(manager, description)
         for description in NUMBERS
         if description.supported_fn is None or description.supported_fn(manager)
-    )
+    ]
+    if manager.model_code == 0x9E:
+        entities.append(DjiChargingPower(manager))
+    async_add_entities(entities)
 
 
 class DjiPowerNumber(DjiPowerEntity, NumberEntity):
@@ -166,3 +169,48 @@ class DjiPowerNumber(DjiPowerEntity, NumberEntity):
             raise HomeAssistantError(f"Value must follow a {step} W step from {min_value} W")
         await self.description.set_fn(self.manager, target)
         self.async_write_ha_state()
+
+
+class DjiChargingPower(DjiPowerEntity, NumberEntity):
+    """Auro charging power with a separately selectable upper endpoint."""
+
+    _attr_translation_key = "charging_power"
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_device_class = NumberDeviceClass.POWER
+    _attr_mode = NumberMode.BOX
+    _attr_native_step = 1
+
+    def __init__(self, manager: DjiPowerManager) -> None:
+        super().__init__(manager, "charging_power", None)
+
+    @property
+    def _power(self):
+        cfg = self.manager.state.config
+        return cfg.charging_power if cfg and self.manager.is_ready else None
+
+    @property
+    def native_value(self) -> int | None:
+        power = self._power
+        return power.current if power else None
+
+    @property
+    def available(self) -> bool:
+        return self._power is not None
+
+    @property
+    def native_min_value(self) -> int:
+        power = self._power
+        return power.minimum if power else 0
+
+    @property
+    def native_max_value(self) -> int:
+        power = self._power
+        return power.maximum if power else 0
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        power = self._power
+        return {"reported_step_w": power.step} if power else {}
+
+    async def async_set_native_value(self, value: float) -> None:
+        await self.manager.async_set_energy_setting(0x1026, value)

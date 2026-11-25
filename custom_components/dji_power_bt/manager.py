@@ -53,8 +53,9 @@ from .protocol import (
     update_0x1018_off_peak_power, update_0x1018_peak_discharge_enabled,
     tariff_schedule_signature, validate_local_auth_key,
 )
+from .protocol_config import ENERGY_SWITCH_LENGTHS, build_energy_setting_payload, tariff_price_units
 from .write_policy import (
-    ACTIVE_WRITE_VERIFICATION, OFF_PEAK_POWER_WRITE_VERIFICATION, snapshot_is_fresh,
+    ACTIVE_WRITE_VERIFICATION, OFF_PEAK_POWER_WRITE_VERIFICATION, PERIODIC_TARIFF_VERIFICATION, snapshot_is_fresh,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -247,12 +248,13 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
 
     @property
     def tariff_preset_control_available(self) -> bool:
-        """Return whether the captured Power 2000 tariff writer is available."""
+        """Return whether this model has a usable tariff configuration."""
         return bool(
             self.is_ready
-            and self.model_code == 0x94
+            and self.model_code in (0x94, 0x9E)
             and self.capabilities.has_tariff_slots
             and self.state.config is not None
+            and (self.model_code != 0x9E or self.state.config.auro_tariff_table_valid)
         )
 
     def is_runtime_feature_available(self, feature: RuntimeFeature) -> bool:
@@ -582,6 +584,7 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
                 interface_type=interface_type,
                 port_index=port_index,
                 enabled=enabled,
+                single_port=self.model_code == 0x9E,
             )
             if self._skip_unchanged_config_write(
                 0x100D, updated_states == cfg.output_interface_states
@@ -593,6 +596,40 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
                 verification_key=f"output_{interface_type:02x}_{port_index}",
                 expected_output=(interface_type, port_index, enabled),
                 updated_output_states=updated_states,
+            )
+
+    async def async_set_energy_setting(self, key: int, target: bool | int | float) -> None:
+        """Change one observed energy-management property on a supported model."""
+        if self.model_code not in (0x98, 0x9E) or (
+            key not in ENERGY_SWITCH_LENGTHS and not (key == 0x1026 and self.model_code == 0x9E)
+        ):
+            raise HomeAssistantError("Unsupported energy management setting")
+        async with self._operation_lock:
+            await self._ensure_ready()
+            cfg = await self._config_for_write(
+                required_tlv=key, max_age_s=CONFIG_CACHE_MAX_AGE_SECONDS,
+                refresh_source="0x60_energy_setting_prewrite",
+            )
+            raw = cfg.setting_records.get(key)
+            if raw is None:
+                raise HomeAssistantError("Energy management record unavailable")
+            value = bytearray(raw)
+            if key == 0x1026:
+                power = cfg.charging_power
+                if power is None or not power.accepts(target):
+                    raise HomeAssistantError("Charging power must match the reported range and step or its maximum")
+                value[25:29] = int(target).to_bytes(4, "little")
+            else:
+                if cfg.energy_switch(key) is None or not isinstance(target, bool):
+                    raise HomeAssistantError("Unrecognized energy switch state")
+                value[1] = 1 if target else 2
+            if self._skip_unchanged_config_write(key, value == raw):
+                return
+            await self._send_0x63_and_apply(
+                build_energy_setting_payload(key, bytes(value)),
+                expected_tlv=key,
+                expected_setting=(key, int(target)),
+                updated_setting=bytes(value),
             )
 
     async def async_set_ac_output_enabled(self, enabled: bool) -> None:
@@ -667,13 +704,24 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         *,
         preset: str | None = None,
         periods: list[dict[str, Any]] | None = None,
+        flat_rate_electricity_price: float | int | str | None = None,
+        currency: str | None = None,
     ) -> None:
         """Replace the complete tariff table from one preset or period list."""
         if (preset is None) == (periods is None):
             raise HomeAssistantError(
                 "Specify exactly one of preset or periods for the tariff schedule"
             )
+        auro = self.model_code == 0x9E
+        if (flat_rate_electricity_price is None) != (currency is None):
+            raise HomeAssistantError("Specify flat_rate_electricity_price and currency together")
+        flat_rate = None
         try:
+            if currency is not None:
+                if not auro or currency not in ("EUR", "GBP"):
+                    raise ValueError("Flat rate requires Auro and currency EUR or GBP")
+                units = tariff_price_units(flat_rate_electricity_price)
+                flat_rate = bytes([1 if currency == "EUR" else 2]) + units.to_bytes(4, "little") + b"\x01"
             updated_slots = (
                 make_tariff_slots_from_preset(preset)
                 if preset is not None
@@ -682,17 +730,19 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         except ValueError as err:
             raise HomeAssistantError(str(err)) from err
 
+        if not auro and any(slot.price_units is not None for slot in updated_slots):
+            raise HomeAssistantError("Period prices require Auro")
         async with self._operation_lock:
             await self._ensure_ready()
-            if self.model_code != 0x94 or not self.capabilities.has_tariff_slots:
+            if self.model_code not in (0x94, 0x9E) or not self.capabilities.has_tariff_slots:
                 raise HomeAssistantError(
-                    "Tariff schedule writes are only supported for DJI Power 2000"
+                    "Tariff schedule writes are only supported for DJI Power 2000 and Auro 2000 Elite"
                 )
 
             # Use a recent device report for the full-table difference check.
             # Tariff writes replace the complete table and never merge periods.
             cfg = self.state.config
-            if not snapshot_is_fresh(
+            if (auro and (cfg is None or not cfg.auro_tariff_table_valid)) or not snapshot_is_fresh(
                 last_report_monotonic=self._last_config_report_monotonic,
                 now_monotonic=asyncio.get_running_loop().time(),
                 max_age_s=CONFIG_CACHE_MAX_AGE_SECONDS,
@@ -700,19 +750,33 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
                 cfg = await self._read_current_config()
                 self._apply_config(cfg, source="0x60_tariff_prewrite", notify=False)
 
+            if auro and (cfg is None or not cfg.auro_tariff_table_valid):
+                raise HomeAssistantError("Complete Auro tariff table is unavailable")
+
             if self._skip_unchanged_config_write(
                 0x1016,
-                cfg is not None and tariff_schedule_signature(cfg.tariff_slots)
-                == tariff_schedule_signature(updated_slots),
+                cfg is not None and (flat_rate is None or cfg.setting_records.get(0x102A) == flat_rate)
+                and tariff_schedule_signature(cfg.tariff_slots, include_prices=auro)
+                == tariff_schedule_signature(updated_slots, include_prices=auro),
             ):
                 return
 
-            payload, updated_slots = build_0x63_tariff_schedule_payload(updated_slots)
+            try:
+                payload, updated_slots = build_0x63_tariff_schedule_payload(
+                    updated_slots, auro=auro, flat_rate=flat_rate
+                )
+            except ValueError as err:
+                raise HomeAssistantError(str(err)) from err
             await self._send_0x63_and_apply(
                 payload,
                 expected_tlv=0x1016,
                 verification_key=(
                     f"tariff_schedule_{preset}" if preset else "tariff_schedule"
+                ),
+                verify_period_prices=auro,
+                expected_flat_rate=flat_rate,
+                verification_policy=(
+                    PERIODIC_TARIFF_VERIFICATION if flat_rate is not None else ACTIVE_WRITE_VERIFICATION
                 ),
                 expected_tariff_slots=updated_slots,
                 updated_tariff_slots=updated_slots,

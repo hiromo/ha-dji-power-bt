@@ -11,10 +11,7 @@ idle -> connecting/resolving -> GATT connected -> C305 notification subscription
  -> ready: publish latest buffered state
 ```
 
-There is no mandatory initial 0x62 wait or report timeout. The October 12 app
-capture includes successful GET-before-0x62 startup on Mini; see the
-[analysis](app-startup-order-2026-10-12-capture.md). First-0x61 timing remains a
-hypothesis and is not an additional prerequisite in the implementation.
+Initialization proceeds after authentication without waiting for the first report or telemetry notification. See [ADR 0008](../decisions/0008-follow-observed-app-initialization.md).
 All five GETs are sequential and retain ordinary request/write deadlines.
 No extra 0x63 initialization write is sent.
 
@@ -148,38 +145,7 @@ For a still-live setup client whose intentional disconnect is initiated by setup
 
 The manager tracks the monotonic time of the last notification. Current watchdog threshold is 30 seconds. A ready connection with no notifications beyond the threshold is treated as unhealthy and should flow through the connection recovery path.
 
-## Diagnostic counters
-
-The canonical diagnostic JSON structure, scopes, field meanings, event records,
-and redaction boundaries are defined in
-[`connection-diagnostics.md`](connection-diagnostics.md). This section records
-the lifecycle semantics those fields must preserve.
-
-Current connection diagnostics distinguish:
-
-- `gatt_connect_count`: number of adopted GATT clients since manager setup;
-- `gatt_reconnect_count`: GATT client adoptions after the first;
-- `successful_reconnect_count`: times the manager returned to `ready` after the first `ready`;
-- `last_gatt_connect_at`: last GATT adoption time;
-- `last_ready_at`: last fully ready time.
-
-Legacy `last_connect_at` and `reconnect_count` are aliases for GATT-side values.
-
-`connection_counters.scope` is `manager_runtime_since_setup`; the counters are
-not lifetime device totals. `last_unexpected_disconnect_age_s` is the elapsed
-time since the last unexpected-disconnect callback.
-
-After a successful recovery and cleanup, the expected ownership state is:
-
-```text
-active_client_is_connected = true
-retired_client_present = false
-expected_disconnect_client_count = 0
-```
-
-## Known diagnostic caveat
-
-An initial connection-resolution failure can currently leave `last_disconnect_reason = connect_error` even though no previously established link disconnected. For startup failure analysis, prefer `last_connection_failure_category` and `last_connection_failure_phase`. Do not use this caveat as a reason to change lifecycle behavior without separate tests; it is a diagnostic-semantics cleanup candidate.
+For recovery counters, client ownership after cleanup, and failure categories, see [connection diagnostics](connection-diagnostics.md).
 
 ## Real-world validated behavior
 
@@ -190,4 +156,12 @@ been validated with real hardware. The shared domain lock serializes only
 controller-heavy connection setup and teardown; independent per-device
 telemetry continues concurrently after connection.
 
-Treat this as evidence for preserving the sequence, not as proof that every RF/backend failure will recover within the same time.
+In September 2026, Power 2000 repeatedly disconnected about eight seconds
+after authentication during the initial configuration read. The first
+disconnect was outside the recorded history.
+
+**Operator observation:** Connection stability improved substantially after
+the October 2026 ESPHome Bluetooth Proxy update. The operator attributes
+much of the earlier reconnect difficulty to factors outside the integration.
+Rare Mini reconnect failures still occur. The available traces do not
+identify the cause of those remaining failures.

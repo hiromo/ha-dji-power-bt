@@ -300,12 +300,13 @@ def parse_0x3030_power_metrics(value: bytes, metrics: RealtimeMetrics) -> None:
     metrics.raw_records = raw_records
 
 
-def parse_realtime_metrics(payload: bytes) -> RealtimeMetrics:
+def parse_realtime_metrics(payload: bytes, *, model_code: int | None = None) -> RealtimeMetrics:
     metrics = RealtimeMetrics()
     tlv_3010 = find_first_tlv(payload, 0x3010, min_length=1)
     if tlv_3010 is not None:
         metrics.raw_0x3010_hex = tlv_3010[1].hex(" ")
-    tlv_3020 = find_first_tlv(payload, 0x3020, expected_lengths={0x0C}, min_length=0x0C)
+    battery_lengths = {12, 13} if model_code == 0x9E else {12}
+    tlv_3020 = find_first_tlv(payload, 0x3020, expected_lengths=battery_lengths, min_length=12)
     if tlv_3020 is not None:
         _, value = tlv_3020
         metrics.raw_0x3020_hex = value.hex(" ")

@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import time as dt_time
+from decimal import Decimal, InvalidOperation
 import time
 from typing import Any
 
@@ -45,6 +46,31 @@ DEFAULT_STATUS_REQUEST_PAYLOAD = bytes.fromhex(
 )
 
 
+ENERGY_SWITCH_LENGTHS = {0x1021: 3, 0x101C: 2, 0x101D: 2}
+
+
+@dataclass(frozen=True, slots=True)
+class ChargingPower:
+    minimum: int
+    maximum: int
+    step: int
+    current: int
+
+    def accepts(self, watts: int | float) -> bool:
+        return self.minimum <= watts <= self.maximum and (
+            watts == self.maximum or (watts - self.minimum) % self.step == 0
+        )
+
+    @classmethod
+    def from_record(cls, raw: bytes | None) -> ChargingPower | None:
+        if raw is None or len(raw) != 29 or raw[0] != 1:
+            return None
+        power = cls(u32le(raw, 5), u32le(raw, 9), u32le(raw, 1), u32le(raw, 25))
+        if not 0 < power.minimum < power.maximum or not 0 < power.step <= power.maximum - power.minimum:
+            return None
+        return power if power.accepts(power.current) else None
+
+
 @dataclass(slots=True)
 class TariffSlot:
     kind_raw: int
@@ -53,6 +79,7 @@ class TariffSlot:
     reserved_hex: str
     start_time: str
     end_time: str
+    price_units: int | None = None
 
     @property
     def kind(self) -> str:
@@ -95,6 +122,7 @@ class TariffSlot:
             "reserved_hex": self.reserved_hex,
             "start_time": self.start_time,
             "end_time": self.end_time,
+            **({"price": self.price_units / 10000} if self.price_units is not None else {}),
         }
 
 
@@ -245,6 +273,20 @@ def validate_tariff_slots(slots: Sequence[TariffSlot]) -> None:
                 coverage[index] = True
 
 
+def tariff_price_units(value: object) -> int:
+    """Convert a price per kWh to its exact unsigned wire representation."""
+    try:
+        price = Decimal(str(value))
+    except InvalidOperation as err:
+        raise ValueError("price must be a decimal number") from err
+    if not price.is_finite() or not 0 <= price <= Decimal("429496.7295"):
+        raise ValueError("price is outside the unsigned 32-bit tariff range")
+    units = int(price * 10000)
+    if Decimal(units).scaleb(-4) != price:
+        raise ValueError("price must be representable with four decimal places")
+    return units
+
+
 def make_tariff_slots_from_periods(
     periods: Sequence[Mapping[str, Any]],
 ) -> list[TariffSlot]:
@@ -288,6 +330,7 @@ def make_tariff_slots_from_periods(
         slots.append(
             TariffSlot(
                 kind_raw=kind_raw,
+                price_units=tariff_price_units(period["price"]) if "price" in period else None,
                 day_mode_raw=0x01 if day_mask == 0x7F else 0x02,
                 day_mask=day_mask,
                 reserved_hex="00 00 00",
@@ -307,24 +350,20 @@ def make_tariff_slots_from_periods(
 
 
 def tariff_schedule_signature(
-    slots: Sequence[TariffSlot] | None,
-) -> tuple[tuple[int, int, int, str, str, str], ...] | None:
+    slots: Sequence[TariffSlot] | None, *, include_prices: bool = False,
+) -> tuple[tuple, ...] | None:
     """Return an order-independent exact signature for full-table comparison."""
     if slots is None:
         return None
-    return tuple(
-        sorted(
-            (
-                slot.kind_raw,
-                slot.day_mode_raw,
-                slot.day_mask,
-                slot.reserved_hex.lower(),
-                slot.start_time,
-                slot.end_time,
-            )
-            for slot in slots
-        )
-    )
+    rows = []
+    for slot in slots:
+        row = (slot.kind_raw, slot.day_mode_raw, slot.day_mask, slot.reserved_hex.lower(),
+               slot.start_time, slot.end_time)
+        if include_prices:
+            # The wire price is unsigned, so -1 distinctly represents unset.
+            row += (slot.price_units if slot.price_units is not None else -1,)
+        rows.append(row)
+    return tuple(sorted(rows))
 
 
 def classify_tariff_schedule(slots: list[TariffSlot] | None) -> str:
@@ -448,6 +487,20 @@ class PowerConfig:
     communication_module_firmware: str | None = None
     timezone_offset_min: int | None = None
     base_config_raw_hex: str | None = None
+
+    setting_records: dict[int, bytes] = field(default_factory=dict)
+    auro_tariff_table_valid: bool = False
+    tariff_prices_unset: bool = False
+
+    @property
+    def charging_power(self) -> ChargingPower | None:
+        return ChargingPower.from_record(self.setting_records.get(0x1026))
+
+    def energy_switch(self, key: int) -> bool | None:
+        value = self.setting_records.get(key)
+        if value is None or value[0] != 1:
+            return None
+        return _decode_on_off(value[1])
 
     tlv_1005_value: bytes | None = None
     tlv_1005_offset: int | None = None
@@ -663,11 +716,23 @@ def decode_day_mask_ja(mask: int) -> str:
     return "+".join(matched) if matched else f"0x{mask:02x}"
 
 
+def _known_auro_tariff_row(row: bytes) -> bool:
+    return (
+        len(row) == 15 and row[0] in (1, 2)
+        and (row[1:3] == bytes((1, 127)) or (row[1] == 2 and 1 <= row[2] <= 127))
+        and row[3:6] == bytes(3)
+        and row[6] < 24 and row[7] < 60 and row[8] < 24 and row[9] < 60
+        and row[6:8] != row[8:10]
+        and (row[14] == 1 or row[10:] == bytes(5))
+    )
+
+
 def parse_0x1017_time_slot(value: bytes) -> TariffSlot | None:
     if len(value) < 10:
         return None
     return TariffSlot(
         kind_raw=value[0],
+        price_units=u32le(value, 10) if len(value) == 15 and value[14] == 1 else None,
         day_mode_raw=value[1],
         day_mask=value[2],
         reserved_hex=value[3:6].hex(" "),
@@ -802,12 +867,40 @@ def parse_power_config(payload: bytes, *, source_cmd_id: int) -> PowerConfig:
             cfg.output_table_unparsed_hex,
         ) = parse_0x100d_output_states(tlv_100d[1])
 
-    for _, slot_value in find_tlvs(payload, 0x1017, expected_lengths={0x0A}):
-        slot = parse_0x1017_time_slot(slot_value)
-        if slot is not None:
-            cfg.tariff_slots.append(slot)
+    # Only accept writable properties at outer TLV boundaries.
+    body = payload
+    if source_cmd_id == 0x60 and payload[4:8] == b"\x00\x00\x10\x00":
+        body = payload[20:]
+    elif payload[:4] == b"\x00\x00\x10\x00":
+        body = payload[16:]
+    lengths = {**ENERGY_SWITCH_LENGTHS, 0x1026: 29, 0x102A: 6}
+    outer = iter_tlvs(body)
+    for key, _, value in outer:
+        if lengths.get(key) == len(value):
+            cfg.setting_records[key] = value
 
-    tlv_1018 = find_first_tlv(payload, 0x1018, expected_lengths={0x56}, min_length=0x56)
+    tables = [value for key, _, value in outer if key == 0x1016]
+    if tables:
+        rows, tail = _parse_nested_records(
+            tables[0], expected_tlv_id=0x1017, minimum_value_length=10
+        )
+        cfg.auro_tariff_table_valid = (
+            len(tables) == 1 and tail is None
+            and sum(4 + len(value) for _, _, value in outer) == len(body)
+            and all(_known_auro_tariff_row(row) for _, row in rows)
+        )
+        cfg.tariff_prices_unset = cfg.auro_tariff_table_valid and all(
+            row[10:] == bytes(5) for _, row in rows
+        )
+    else:
+        rows = find_tlvs(payload, 0x1017, expected_lengths={10})
+    for _, row in rows:
+        if len(row) in (10, 15):
+            slot = parse_0x1017_time_slot(row)
+            if slot is not None:
+                cfg.tariff_slots.append(slot)
+
+    tlv_1018 = find_first_tlv(payload, 0x1018, expected_lengths={0x56, 103}, min_length=0x56)
     if tlv_1018 is not None:
         offset, value = tlv_1018
         cfg.tlv_1018_offset = offset
@@ -959,7 +1052,7 @@ def make_0x1018_write_tlv(value_1018: bytes) -> bytes:
     return _make_tlv(0x1018, value_1018)
 
 
-def _make_0x1016_tariff_table(slots: Sequence[TariffSlot]) -> bytes:
+def _make_0x1016_tariff_table(slots: Sequence[TariffSlot], *, auro: bool = False) -> bytes:
     """Build one complete tariff table from validated writable slots.
 
     Read reports expose each record as 0x1017, while writes wrap 0x0016 records
@@ -970,6 +1063,11 @@ def _make_0x1016_tariff_table(slots: Sequence[TariffSlot]) -> bytes:
     for slot in slots:
         start_hour, start_minute = (int(part) for part in slot.start_time.split(":"))
         end_hour, end_minute = (int(part) for part in slot.end_time.split(":"))
+        price = b""
+        if auro:
+            price = bytes(5) if slot.price_units is None else slot.price_units.to_bytes(4, "little") + b"\x01"
+        elif slot.price_units is not None:
+            raise ValueError("Period prices require Auro")
         nested += _make_tlv(
             0x0016,
             bytes(
@@ -985,7 +1083,7 @@ def _make_0x1016_tariff_table(slots: Sequence[TariffSlot]) -> bytes:
                     end_hour,
                     end_minute,
                 )
-            ),
+            ) + price,
         )
     return _make_tlv(0x1016, bytes(nested))
 
@@ -1018,11 +1116,11 @@ def make_0x100d_output_table_write_tlv(
     interface_type: int,
     port_index: int,
     enabled: bool,
+    single_port: bool = False,
 ) -> tuple[bytes, list[OutputInterfaceState]]:
-    """Build a full-table 0x100D read-modify-write payload.
+    """Encode the changed output, preserving opaque bytes in every emitted row.
 
-    Every 0x1014 read record is emitted as a 0x000D write record, preserving
-    order and all bytes except the target record's state byte.
+    Auro sends only the addressed row. The default sends the complete table.
     """
     if not cfg.output_table_write_supported:
         raise ValueError("complete 0x100D output table is not available")
@@ -1035,8 +1133,11 @@ def make_0x100d_output_table_write_tlv(
         )
         record_value = item.value_with_state(enabled) if is_target else item.raw_value
         if is_target:
+            if target_found or item.enabled is None:
+                raise ValueError("Ambiguous or unknown output port state")
             target_found = True
-        nested += _make_tlv(0x000D, record_value)
+        if is_target or not single_port:
+            nested += _make_tlv(0x000D, record_value)
         updated_states.append(
             OutputInterfaceState(
                 read_tlv_id=item.read_tlv_id,
@@ -1078,18 +1179,24 @@ def make_0x101e_charging_mode_write_tlv(
     return _make_tlv(0x101E, bytes(nested)), updated_modes
 
 
+def build_energy_setting_payload(key: int, value: bytes) -> bytes:
+    return build_keyed_header() + make_0x100e_command_write_tlv() + _make_tlv(key, value)
+
+
 def build_0x63_output_payload_from_config(
     cfg: PowerConfig,
     *,
     interface_type: int,
     port_index: int,
     enabled: bool,
+    single_port: bool = False,
 ) -> tuple[bytes, list[OutputInterfaceState]]:
     output_tlv, updated_states = make_0x100d_output_table_write_tlv(
         cfg,
         interface_type=interface_type,
         port_index=port_index,
         enabled=enabled,
+        single_port=single_port,
     )
     payload = (
         build_keyed_header()
@@ -1125,14 +1232,20 @@ def build_0x63_tariff_payload(kind: str) -> tuple[bytes, list[TariffSlot]]:
 
 
 def build_0x63_tariff_schedule_payload(
-    slots: Sequence[TariffSlot],
+    slots: Sequence[TariffSlot], *, auro: bool = False, flat_rate: bytes | None = None,
 ) -> tuple[bytes, list[TariffSlot]]:
     """Build a complete arbitrary tariff-table 0x63 payload."""
     normalized_slots = list(slots)
-    tariff_tlv = _make_0x1016_tariff_table(normalized_slots)
+    if flat_rate is not None and (not auro or len(flat_rate) != 6 or flat_rate[0] not in (1, 2) or flat_rate[5] != 1):
+        raise ValueError("Invalid Auro flat-rate property")
+    maximum = 51 if flat_rate is None else 50
+    if auro and len(normalized_slots) > maximum:
+        raise ValueError(f"Auro tariff table exceeds the {maximum}-period frame limit")
+    tariff_tlv = _make_0x1016_tariff_table(normalized_slots, auro=auro)
     return (
         build_keyed_header()
         + make_0x100e_command_write_tlv()
+        + (_make_tlv(0x102A, flat_rate) if flat_rate is not None else b"")
         + tariff_tlv,
         normalized_slots,
     )
@@ -1174,6 +1287,9 @@ def parse_0x63_write_result(payload: bytes) -> dict[str, Any]:
         0x1018,
         0x101E,
         0x1023,
+        0x1026,
+        0x102A,
+        *ENERGY_SWITCH_LENGTHS,
     }
     for tlv_id, _value_offset, value in iter_tlvs(body):
         if tlv_id in supported and len(value) == 4:

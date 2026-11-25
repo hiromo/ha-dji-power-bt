@@ -92,53 +92,7 @@ See [`connection-diagnostics.md`](connection-diagnostics.md) for the canonical
 connection-diagnostic JSON structure, field scopes and lifetimes, failure
 categories, lifecycle state, event-history schema, and redaction contract.
 
-Connection:
-
-- current phase;
-- GATT connect/reconnect/successful-reconnect counters;
-- last failure phase/category/error;
-- active/retired/expected client state;
-- fresh-advertisement gate state;
-- domain connection-lock holder/waiters;
-- stale backend cleanup count.
-
-Transport:
-
-- pending request count;
-- write-lock context/age;
-- GATT write timeout count;
-- reassembly CRC/length/discard counters;
-- config read/cache-hit counters;
-- verification readback/timeout counters.
-
-Protocol:
-
-- safe latest payloads;
-- 0x66 full-parse/fast-path counts and bounded pattern history;
-- raw unresolved battery/config fields where intentionally retained.
-
-Stable grouped diagnostic surfaces include:
-
-- `connection_counters`, with
-  `scope = manager_runtime_since_setup`, GATT adoption/re-adoption counts, and
-  fully successful reconnect count;
-- compatibility aliases `last_connect_at` and `reconnect_count` for existing
-  diagnostic consumers;
-- `client_lifecycle.expected_disconnect_client_count` and
-  `client_lifecycle.last_unexpected_disconnect_age_s`;
-- `gatt_frame_reassembly` for valid frames, CRC/length failures, discarded
-  bytes, and incomplete buffering;
-- `ble_traffic_control` for `config_read_request_count`,
-  `config_cache_hit_count`, `verification_readback_count`, and
-  `passive_verification_timeout_count`;
-- `off_peak_charging_power_step` for the configured model-profile step and the
-  diagnostic-only 0x1018 offset-34 candidate;
-- `write_history`, including ACK sequence, verification source/state, and
-  `superseded_by_new_write` outcomes.
-
-## Known diagnostic semantic caveat
-
-`last_disconnect_reason` can currently contain `connect_error` after an initial connection attempt failed before a link was established. For startup analysis, use the explicit connection-failure phase/category fields. A future cleanup may split "last disconnect" from "last connection attempt failure" more strictly; do not combine that semantic cleanup with BLE lifecycle changes unnecessarily.
+For transport and protocol failures, inspect pending requests, write timeouts, frame reassembly, and write verification history.
 
 ## Payload security
 

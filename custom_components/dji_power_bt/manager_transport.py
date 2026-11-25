@@ -88,7 +88,7 @@ class ManagerTransportMixin:
         now = utcnow_iso()
         self.state.last_notify_at = now
         if frame.cmd_id == 0x61:
-            self.state.metrics = parse_realtime_metrics(frame.payload)
+            self.state.metrics = parse_realtime_metrics(frame.payload, model_code=self.model_code)
             self.state.last_0x61_at = now
             self._schedule_telemetry_publish()
             return
@@ -323,7 +323,7 @@ class ManagerTransportMixin:
             0x100D: cfg.tlv_100d_value,
             0x1018: cfg.tlv_1018_value,
             0x101E: cfg.tlv_101e_value,
-        }.get(tlv_id) is not None
+        }.get(tlv_id) is not None or tlv_id in cfg.setting_records
 
     async def _config_for_write(
         self,
@@ -377,6 +377,10 @@ class ManagerTransportMixin:
         expected_energy_mode: str | None = None,
         expected_charging_mode: str | None = None,
         expected_tariff_slots: list[TariffSlot] | None = None,
+        verify_period_prices: bool = False,
+        expected_flat_rate: bytes | None = None,
+        expected_setting: tuple[int, int] | None = None,
+        updated_setting: bytes | None = None,
         new_1018_value: bytes | None = None,
         new_1005_value: bytes | None = None,
         updated_output_states: list[OutputInterfaceState] | None = None,
@@ -413,7 +417,12 @@ class ManagerTransportMixin:
         if verification_key is None:
             verification_key = f"property_0x{expected_tlv:04x}"
 
-        if not write_result_ok(result, expected_tlv):
+        if not write_result_ok(result, expected_tlv) or (
+            expected_flat_rate is not None and not write_result_ok(result, 0x102A)
+        ):
+            # A combined write may have applied only one property.
+            if expected_flat_rate is not None:
+                self._last_config_report_monotonic = None
             self.state.last_write_result = f"0x{expected_tlv:04x} NG: {result}"
             self.state.reflection_confirmed = False
             self.state.reflection_source = "0x63_ack_error"
@@ -432,6 +441,12 @@ class ManagerTransportMixin:
 
         cfg = self.state.config
         if cfg is not None:
+            if updated_setting is not None:
+                cfg.setting_records[expected_tlv] = updated_setting
+            if expected_flat_rate is not None:
+                cfg.setting_records[0x102A] = expected_flat_rate
+            if verify_period_prices and updated_tariff_slots is not None:
+                cfg.tariff_prices_unset = all(slot.price_units is None for slot in updated_tariff_slots)
             if new_1018_value is not None:
                 cfg.tlv_1018_value = new_1018_value
             if new_1005_value is not None:
@@ -462,7 +477,7 @@ class ManagerTransportMixin:
             if expected_discharge_limit is not None:
                 cfg.discharge_limit_percent = expected_discharge_limit
         expected_tariff_schedule = (
-            tariff_schedule_signature(expected_tariff_slots)
+            tariff_schedule_signature(expected_tariff_slots, include_prices=verify_period_prices)
             if expected_tariff_slots is not None
             else None
         )
@@ -478,6 +493,12 @@ class ManagerTransportMixin:
             "expected_charging_mode": expected_charging_mode,
             "expected_tariff_schedule": expected_tariff_schedule,
         }
+        if expected_setting is not None:
+            expected["expected_setting"] = expected_setting
+        if verify_period_prices:
+            expected["verify_period_prices"] = True
+        if expected_flat_rate is not None:
+            expected["flat_rate_hex"] = expected_flat_rate.hex()
         history_record: dict[str, Any] = {
             "property": verification_key,
             "sequence": frame.seq,
@@ -525,10 +546,21 @@ class ManagerTransportMixin:
             expected.get("expected_charging_mode") is None
             or cfg.charging_mode == expected["expected_charging_mode"],
             expected.get("expected_tariff_schedule") is None
-            or tariff_schedule_signature(cfg.tariff_slots)
+            or tariff_schedule_signature(cfg.tariff_slots, include_prices=expected.get("verify_period_prices", False))
             == expected["expected_tariff_schedule"],
         ]
 
+        if expected.get("verify_period_prices"):
+            checks.append(cfg.auro_tariff_table_valid)
+        if "flat_rate_hex" in expected:
+            checks.append(cfg.setting_records.get(0x102A) == bytes.fromhex(expected["flat_rate_hex"]))
+        if expected.get("expected_setting") is not None:
+            key, target = expected["expected_setting"]
+            if key == 0x1026:
+                power = cfg.charging_power
+                checks.append(power is not None and power.current == target)
+            else:
+                checks.append(cfg.energy_switch(key) == target)
         expected_output = expected.get("expected_output")
         if expected_output is not None:
             interface_type, port_index, enabled = expected_output

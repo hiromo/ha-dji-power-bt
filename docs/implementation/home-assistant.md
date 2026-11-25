@@ -114,7 +114,7 @@ protocol-group aggregate.
 
 ## Numbers
 
-- `number.<device>_off_peak_charging_power`: Power 2000 capability; reported min/max with 10 W model step currently confirmed for Power 2000;
+- `number.<device>_off_peak_charging_power`: Power 2000 and Power Auro 2000 Elite; device-reported min/max and a 10 W model-profile step;
 - charge limit;
 - discharge limit.
 
@@ -128,12 +128,12 @@ protocol-group aggregate.
 
 ## Selects
 
-- energy optimization mode on supported Power 2000 behavior;
+- energy optimization mode on Power 2000 and Power Auro 2000 Elite;
 - charging mode on supported models, currently verified on Power 1000 Mini using the device-reported 0x101E table.
 
 ## Buttons
 
-Power 2000 tariff preset buttons are available for known supported tariff behavior:
+Power 2000 and Power Auro 2000 Elite expose two tariff preset buttons:
 
 - set all-day peak tariff;
 - set all-day off-peak tariff.
@@ -168,7 +168,7 @@ Capture is memory-only/bounded. Sensitive authentication payloads are excluded.
 
 ### `dji_power_bt.set_scheduled_energy_settings`
 
-Power 2000-oriented combined setting service. Optional fields:
+Combined scheduled-energy service for Power 2000 and Power Auro 2000 Elite. Optional fields:
 
 - `energy_optimization_mode`: `disabled` or `scheduled`;
 - `peak_discharging`: boolean;
@@ -205,7 +205,7 @@ data:
 
 ### `dji_power_bt.set_tariff_schedule`
 
-Power 2000 tariff-table replacement action. It requires `device_id` and
+Power 2000 and Auro tariff-table replacement action. It requires `device_id` and
 exactly one of these input forms:
 
 - `preset`: `all_day_peak` or `all_day_off_peak`;
@@ -217,8 +217,8 @@ The supplied schedule replaces the complete device tariff table; it is never
 merged with the current table or the DJI Home timetable. Times use whole-minute
 precision. An end time earlier than the start time crosses midnight. Equal
 start and end times, duplicate weekdays, and overlapping periods are rejected;
-gaps are allowed. The action accepts at most 64 periods, a transport-derived
-limit rather than a confirmed Power 2000 UI/device limit.
+gaps are allowed. Frame limits are 64 periods on Power 2000 and 51 on Auro,
+or 50 when the Auro flat-rate property shares the frame.
 
 Preset example:
 
@@ -246,14 +246,15 @@ data:
       end_time: "23:59"
 ```
 
-The two preset payloads are confirmed on Power 2000. Detailed period writes
+Both all-day presets were verified on Power 2000 and Power Auro 2000 Elite.
+On Power 2000, detailed period writes
 reuse the observed 0x1017 record layout inside the 0x1016 write table and are
 currently an inferred implementation; they have not yet received real-device
 validation.
 
 ## Tariff period sensor
 
-Power 2000 tariff-period evaluation uses reported 0x1017 slots plus the device-reported 0x1015 timezone offset. Local states include:
+On both models, tariff-period evaluation uses reported 0x1017 slots plus the device-reported 0x1015 timezone offset. Local states include:
 
 ```text
 disabled
@@ -334,3 +335,28 @@ not migration contracts.
 Entity creation uses conservative model capability profiles. Runtime availability can further disable controls when the current mode does not support them.
 
 Do not create a control just because a field can be parsed on one capture. Write safety, model support, and current runtime mode are separate questions.
+
+## Auro and Mini controls
+
+Auro's enabled-by-default `charging_power` number accepts watts through
+`number.set_value`. The device report supplies its minimum, maximum and
+increment. The input box uses a 1 W UI step so that the exceptional maximum
+can be entered. With the captured limits, valid settings are 200–1400 W in
+100 W increments and 1440 W. Other inputs are rejected. The number exposes
+`min`, `max` and `reported_step_w`. Optional diagnostic sensors
+`charging_power_min`, `charging_power_max` and `charging_power_step` expose
+these values separately. Off-peak charging power remains independently settable.
+
+Individual USB switches, Auro's two SDC switches, low battery alarm, AC output
+auto-restore and AC charging cable safety check are disabled by default.
+Mini retains its existing SDC switch for its single reported SDC port. AC
+frequency has no entity. Missing or unrecognized energy records leave the
+corresponding controls unavailable.
+
+Auro supports both all-day buttons and the detailed `set_tariff_schedule`
+action. A replacement period can include `price` per kWh on Auro. Omitting
+it writes an unset price, while an explicit zero writes a configured price
+of zero. Presets create periods with unset prices. Both forms accept the
+optional pair `flat_rate_electricity_price` and `currency` (EUR or GBP).
+Omitting both preserves the normal price and currency. Prices support four
+fractional decimal places. Power 2000 rejects these Auro-only fields. Both all-day presets were verified by the operator.

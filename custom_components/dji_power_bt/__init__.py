@@ -23,6 +23,9 @@ from .const import (
     ATTR_PRESET,
     ATTR_START_TIME,
     ATTR_TARIFF,
+    ATTR_PRICE,
+    ATTR_FLAT_RATE_ELECTRICITY_PRICE,
+    ATTR_CURRENCY,
     ATTR_WEEKDAYS,
     CONF_ADDRESS,
     DEFAULT_CAPTURE_DURATION_SECONDS,
@@ -95,11 +98,14 @@ def _validate_tariff_schedule_action(data: dict) -> dict:
     """Require exactly one complete tariff-schedule input form."""
     if (ATTR_PRESET in data) == (ATTR_PERIODS in data):
         raise vol.Invalid("Specify exactly one of preset or periods")
+    if (ATTR_FLAT_RATE_ELECTRICITY_PRICE in data) != (ATTR_CURRENCY in data):
+        raise vol.Invalid("Specify flat_rate_electricity_price and currency together")
     return data
 
 
 _TARIFF_PERIOD_SCHEMA = vol.Schema(
     {
+        vol.Optional(ATTR_PRICE): vol.Any(int, float, str),
         vol.Required(ATTR_TARIFF): vol.In({"peak", "off_peak"}),
         vol.Required(ATTR_WEEKDAYS): vol.All(
             cv.ensure_list,
@@ -115,6 +121,8 @@ _SERVICE_TARIFF_SCHEDULE_SCHEMA = vol.All(
     vol.Schema(
         {
             vol.Required(ATTR_DEVICE_ID): cv.string,
+            vol.Optional(ATTR_FLAT_RATE_ELECTRICITY_PRICE): vol.Any(int, float, str),
+            vol.Optional(ATTR_CURRENCY): vol.In(("EUR", "GBP")),
             vol.Optional(ATTR_PRESET): vol.In(set(TARIFF_PRESET_OPTIONS)),
             vol.Optional(ATTR_PERIODS): vol.All(
                 cv.ensure_list,
@@ -171,6 +179,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         await manager.async_set_tariff_schedule(
             preset=call.data.get(ATTR_PRESET),
             periods=call.data.get(ATTR_PERIODS),
+            flat_rate_electricity_price=call.data.get(ATTR_FLAT_RATE_ELECTRICITY_PRICE),
+            currency=call.data.get(ATTR_CURRENCY),
         )
 
     hass.services.async_register(

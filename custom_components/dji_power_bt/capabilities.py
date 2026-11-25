@@ -78,6 +78,17 @@ _CAPABILITIES_BY_MODEL_CODE: dict[int, DjiPowerCapabilities] = {
         has_12v_accessory=True,
         has_xt60_accessory=True,
     ),
+    0x9E: DjiPowerCapabilities(
+        usb_a_ports=2,
+        usb_c_ports=3,
+        sdc_ports=2,
+        has_sdc=True,
+        has_tariff_slots=True,
+        has_off_peak_charging=True,
+        off_peak_charging_power_step_w=10,
+        has_peak_discharging=True,
+        has_energy_optimization=True,
+    ),
     # Verified from Android DJI Home BLE captures. 0x100D contains AC, USB and
     # SDC interface records, and 0x101E contains slow/fast charging-mode records.
     0x98: DjiPowerCapabilities(
@@ -115,6 +126,8 @@ def infer_model_code(model: str | None) -> int | None:
         return 0x98
     if "1000 v2" in normalized:
         return 0x97
+    if "auro 2000 elite" in normalized:
+        return 0x9E
     if "2000" in normalized or "dym2000" in normalized:
         return 0x94
     if "1000" in normalized or "dym1000" in normalized:

@@ -139,7 +139,7 @@ Short table replies never replace the complete configuration snapshot.
 : Write verification policy. High-frequency controls and low-frequency controls intentionally use different readback behavior.
 
 `tariff.py`
-: Local evaluation of Power 2000 tariff periods from reported schedule slots and device timezone.
+: Local evaluation of tariff periods on Power 2000 and Power Auro 2000 Elite from reported schedule slots and device timezone.
 
 ## Concurrency model
 

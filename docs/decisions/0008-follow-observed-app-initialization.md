@@ -10,7 +10,7 @@ capture demonstrated successful Mini GET-before-0x62 startup.
 The October 9 capture showed report/ACK before GETs. The later October 12 capture
 showed both report-first and GET-first sessions on the same Mini. Neither a
 mandatory report gate nor a fixed model branch follows from this evidence.
-See the [capture analysis](../implementation/app-startup-order-2026-10-12-capture.md).
+On October 12 the Mini completed all six app GETs before its first 0x62 in one successful session.
 First-0x61 arrival correlates with app GET timing but is not proven to trigger it.
 
 Publishing metrics immediately after authentication allowed HA automations to

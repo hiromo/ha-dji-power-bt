@@ -90,8 +90,7 @@ Only after this step does the manager set `state.authenticated = True`.
 sessions, DJI Home requests session material twice before authenticating with
 the pair key. Each reply provides different material; final authentication
 uses the second reply and the same structural format as the integration.
-All authentication responses indicate success. No authentication payload or
-secret is retained in the [comparison report](../implementation/app-reconnect-comparison-2026-10-12.md).
+All authentication responses indicate success.
 
 **Unknown:** why the app repeats the session request. This is not evidence that
 HA must repeat it: the supplied failed Mini attempts already authenticate

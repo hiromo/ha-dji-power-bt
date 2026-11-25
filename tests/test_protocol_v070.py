@@ -268,3 +268,81 @@ def test_power_2000_0x3030_ac_inlet_and_outlet_records_from_diagnostic() -> None
     assert metrics.raw_records[0]["interface_name"] == "ac_inlet"
     assert metrics.raw_records[1]["group_name"] == "ac_outlet"
     assert metrics.raw_records[1]["interface_name"] == "ac_outlet"
+
+
+def test_auro_tariff_format_and_unknown_record_gate() -> None:
+    slots = protocol.make_tariff_slots_from_periods([
+        {"tariff": "peak", "weekdays": ["mon"], "start_time": "07:13", "end_time": "09:47"}
+    ])
+    payload, _ = protocol.build_0x63_tariff_schedule_payload(slots, auro=True)
+    row = bytes.fromhex("01 02 01 00 00 00 07 0d 09 2f") + bytes(5)
+    assert payload[32:] == tlv(0x1016, tlv(0x0016, row))
+
+    def report(rows):
+        return protocol.parse_power_config(tlv(0x1016, rows), source_cmd_id=0x62)
+
+    cfg = report(tlv(0x1017, row))
+    assert cfg.auro_tariff_table_valid and cfg.tariff_prices_unset
+    assert cfg.tariff_slots == slots
+    priced = report(tlv(0x1017, row[:10] + bytes.fromhex("33 0c 00 00 01")))
+    assert priced.auro_tariff_table_valid and not priced.tariff_prices_unset
+    assert priced.tariff_slots[0].price_units == 3123
+    assert protocol.tariff_schedule_signature(priced.tariff_slots) == protocol.tariff_schedule_signature(slots)
+    assert not report(tlv(0x1017, row) + b"\xff").auro_tariff_table_valid
+    assert not report(tlv(0x1017, row) + tlv(0x9999, row)).auro_tariff_table_valid
+    assert not report(tlv(0x1017, row[:-1] + b"\x02")).auro_tariff_table_valid
+    assert not report(tlv(0x1017, row[:10])).auro_tariff_table_valid
+
+
+def test_auro_charging_power_bounds_and_addressed_port_write() -> None:
+    raw = b"\x01" + b"".join(v.to_bytes(4, "little") for v in
+                             (100, 200, 1440, 1000, 1440, 0, 1000))
+    ports = tlv(0x1014, bytes.fromhex("03 01 01")) + tlv(0x1014, bytes.fromhex("04 02 02"))
+    cfg = protocol.parse_power_config(tlv(0x1026, raw) + tlv(0x100d, ports), source_cmd_id=0x62)
+    power = cfg.charging_power
+    assert (power.minimum, power.maximum, power.step, power.current) == (200, 1440, 100, 1000)
+    assert all(power.accepts(v) for v in (200, 300, 1000, 1400, 1440))
+    assert not any(power.accepts(v) for v in (199, 250, 999.9, 1420, 1441))
+    for single in (True, False):
+        payload, updated = protocol.build_0x63_output_payload_from_config(
+            cfg, interface_type=4, port_index=2, enabled=True, single_port=single
+        )
+        rows = tlv(0x000d, bytes.fromhex("04 02 01"))
+        if not single:
+            rows = tlv(0x000d, bytes.fromhex("03 01 01")) + rows
+        assert payload[16:] == tlv(0x100d, rows) + protocol.make_0x100e_command_write_tlv()
+        assert [item.enabled for item in updated] == [True, True]
+
+
+def test_auro_extended_battery_record_matches_dji_home() -> None:
+    value = bytes.fromhex("dc 05 34 17 02 dc 05 00 00 4c 09 01 02")
+    payload = tlv(0x3020, value) + tlv(0x3030, bytes.fromhex("00 00 00 00 31 30 00 00"))
+    metrics = protocol.parse_realtime_metrics(payload, model_code=0x9E)
+    assert metrics.soc_percent == 15
+    assert metrics.remaining_time_min == 5940
+    assert metrics.battery_temperature_c == 23.8
+    assert metrics.raw_0x3020_hex == value.hex(" ")
+    assert metrics.input_power_w == metrics.output_power_w == 0
+    assert protocol.parse_realtime_metrics(payload, model_code=0x94).soc_percent is None
+    assert protocol.parse_realtime_metrics(tlv(0x3020, value[:-1]), model_code=0x94).soc_percent == 15
+
+
+def test_auro_decimal_price_encoding_and_frame_capacity() -> None:
+    import pytest
+    cfg = load("protocol_config")
+    for value, units in [(0, 0), ("0.0001", 1), (0.3245, 3245), ("429496.7295", 0xffffffff)]:
+        assert cfg.tariff_price_units(value) == units
+    for invalid in (True, None, -1, 0.12345, "NaN", "Infinity", "429496.7296", "0.99999999999999999999999999999"):
+        with pytest.raises(ValueError):
+            cfg.tariff_price_units(invalid)
+    slots = [protocol.TariffSlot(1, 1, 127, "00 00 00", f"00:{i:02}", f"00:{i+1:02}", 3123)
+             for i in range(51)]
+    flat = bytes.fromhex("01 00 00 00 00 01")
+    written, _ = protocol.build_0x63_tariff_schedule_payload(slots[:50], auro=True, flat_rate=flat)
+    assert written[32:42] == tlv(0x102A, flat)
+    assert written.endswith(bytes.fromhex("33 0c 00 00 01"))
+    assert len(written) + 13 <= 1023
+    with pytest.raises(ValueError, match="50-period"):
+        protocol.build_0x63_tariff_schedule_payload(slots, auro=True, flat_rate=flat)
+    written, _ = protocol.build_0x63_tariff_schedule_payload(slots, auro=True)
+    assert written[32:34] == b"\x16\x10"
