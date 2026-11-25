@@ -47,8 +47,8 @@ NUMBERS: tuple[NumberDescription, ...] = (
     NumberDescription(
         key="off_peak_charging_power",
         name="Off-peak charging power",
-        value_fn=lambda m: m.state.off_peak_charging_power_w,
-        min_fn=lambda m: m.state.off_peak_charge_power_min_w or 600,
+        value_fn=lambda m: m.displayed_off_peak_power_w,
+        min_fn=lambda m: m.effective_off_peak_min_w,
         max_fn=lambda m: m.state.off_peak_charge_power_max_w or 1500,
         step_fn=lambda m: m.off_peak_charging_power_step_w,
         set_fn=_set_off_peak_power,
@@ -154,6 +154,8 @@ class DjiPowerNumber(DjiPowerEntity, NumberEntity):
             "reflection_source": self.manager.state.reflection_source,
         }
         if self.description.key == "off_peak_charging_power":
+            attrs["reported_power_w"] = self.manager.reported_off_peak_w
+            attrs["reported_min_w"] = self.manager.state.off_peak_charge_power_min_w
             attrs["configured_step_w"] = self.manager.off_peak_charging_power_step_w
             attrs["step_source"] = "model_profile"
         return attrs

@@ -105,9 +105,16 @@
         "title": "DJI Power Bluetooth options",
         "description": "Control how often the latest BLE telemetry is published to Home Assistant. BLE notifications are still received and parsed at their native cadence.",
         "data": {
-          "telemetry_update_interval": "Telemetry update interval (seconds)"
+          "telemetry_update_interval": "Telemetry update interval (seconds)",
+          "off_peak_min_override_w": "Override off-peak charging power minimum (W)"
+        },
+        "data_description": {
+          "off_peak_min_override_w": "Experimental. Choose 200–600 W in 10 W increments. Leave blank to use the station minimum."
         }
       }
+    },
+    "error": {
+      "invalid_off_peak_minimum": "Enter a value from 200 to 600 W in 10 W increments."
     }
   },
   "selector": {
@@ -230,7 +237,7 @@
     },
     "number": {
       "charging_power": {
-        "name": "Charging power"
+        "name": "Recharging power"
       }
     },
     "switch": {
@@ -238,10 +245,10 @@
         "name": "Low battery alarm"
       },
       "ac_output_auto_restore": {
-        "name": "AC output auto-restore"
+        "name": "AC output auto-restoration"
       },
       "ac_charging_cable_safety_check": {
-        "name": "AC charging cable safety check"
+        "name": "AC recharging cable safety check"
       }
     }
   }

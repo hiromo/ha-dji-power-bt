@@ -119,8 +119,8 @@ def _individual_switches(manager: DjiPowerManager) -> list[SwitchDescription]:
             ))
     for key, label, record_id in (
         ("low_battery_alarm", "Low battery alarm", 0x1021),
-        ("ac_output_auto_restore", "AC output auto-restore", 0x101C),
-        ("ac_charging_cable_safety_check", "AC charging cable safety check", 0x101D),
+        ("ac_output_auto_restore", "AC output auto-restoration", 0x101C),
+        ("ac_charging_cable_safety_check", "AC recharging cable safety check", 0x101D),
     ):
         switches.append(SwitchDescription(
             key=key, name=label,

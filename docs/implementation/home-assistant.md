@@ -114,7 +114,7 @@ protocol-group aggregate.
 
 ## Numbers
 
-- `number.<device>_off_peak_charging_power`: Power 2000 and Power Auro 2000 Elite; device-reported min/max and a 10 W model-profile step;
+- `number.<device>_off_peak_charging_power`: Power 2000 and Power Auro 2000 Elite; device-reported maximum, optional per-entry minimum override, and a 10 W model-profile step;
 - charge limit;
 - discharge limit.
 
@@ -338,7 +338,7 @@ Do not create a control just because a field can be parsed on one capture. Write
 
 ## Auro and Mini controls
 
-Auro's enabled-by-default `charging_power` number accepts watts through
+Auro's enabled-by-default **Recharging power** number (`charging_power`) accepts watts through
 `number.set_value`. The device report supplies its minimum, maximum and
 increment. The input box uses a 1 W UI step so that the exceptional maximum
 can be entered. With the captured limits, valid settings are 200–1400 W in
@@ -347,8 +347,8 @@ can be entered. With the captured limits, valid settings are 200–1400 W in
 `charging_power_min`, `charging_power_max` and `charging_power_step` expose
 these values separately. Off-peak charging power remains independently settable.
 
-Individual USB switches, Auro's two SDC switches, low battery alarm, AC output
-auto-restore and AC charging cable safety check are disabled by default.
+Individual USB switches, Auro's two SDC switches, **Low battery alarm**,
+**AC output auto-restoration** and **AC recharging cable safety check** are disabled by default.
 Mini retains its existing SDC switch for its single reported SDC port. AC
 frequency has no entity. Missing or unrecognized energy records leave the
 corresponding controls unavailable.
@@ -360,3 +360,19 @@ of zero. Presets create periods with unset prices. Both forms accept the
 optional pair `flat_rate_electricity_price` and `currency` (EUR or GBP).
 Omitting both preserves the normal price and currency. Prices support four
 fractional decimal places. Power 2000 rejects these Auro-only fields. Both all-day presets were verified by the operator.
+
+### Experimental off-peak minimum override
+
+The optional `off_peak_min_override_w` entry option accepts 200–600 W in 10 W
+steps on Power 2000 and Auro. An absent option uses the reported range.
+The number's standard `min` and the scheduled-energy service use the same
+effective lower bound on the device's original step grid. `reported_power_w`
+and `reported_min_w` expose the underlying report. Write history records
+requests, acknowledgements and verification separately from telemetry.
+
+Only an acknowledged low request can mask a subsequent midpoint. A different
+report, changed bounds, leaving scheduled mode, turning charging off, or losing
+the session invalidates that interpretation. A fresh explicit same-target
+request can resend after 300 seconds. Normal pre-write snapshot refresh and
+verification still apply. No timer, tariff transition, or restart sends a
+charging command on behalf of an earlier request.

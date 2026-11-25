@@ -106,6 +106,12 @@ def manager_runtime_snapshot(manager: Any) -> dict[str, Any]:
         "write_history": manager.write_history,
         "gatt_frame_reassembly": manager.reassembly_diagnostics,
         "capabilities": asdict(manager.capabilities),
+        "off_peak_charging_power_override": {
+            "configured_min_w": manager.off_peak_min_override,
+            "held_request_w": manager._held_off_peak_w,
+            "reported_power_w": manager.reported_off_peak_w,
+            "reported_min_w": manager.state.off_peak_charge_power_min_w,
+        },
         "off_peak_charging_power_step": {
             "configured_w": manager.capabilities.off_peak_charging_power_step_w,
             "source": "model_profile" if manager.capabilities.off_peak_charging_power_step_w is not None else None,

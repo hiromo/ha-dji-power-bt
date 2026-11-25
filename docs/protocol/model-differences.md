@@ -216,8 +216,35 @@ With allocation enabled in the first run, the reported setting had
 returned to 600 W and charging was disabled by the 30-second readback.
 
 The test established neither a minimum charging headroom under load nor
-persistence over reconnection. A future override needs to distinguish the
+persistence over reconnection. The experimental override distinguishes the
 requested wattage, the device-reported setting, and measured AC input.
+
+### Off-peak minimum override across manual tariff preset changes
+
+**Observed** in operator-reported hardware tests on 2026-11-26. On each
+station the operator pressed **Set all-day peak tariff**, then **Set all-day
+off-peak tariff**. The lower-bound override remained in effect on both.
+After returning to off-peak, the operator verified that actual AC input was
+capped at the selected **Off-peak charging power**: a setting in the mid-500 W
+range on Power 2000 and 200 W on Power Auro 2000 Elite.
+
+**Inferred (operator estimate):** During the Power 2000 test, the station
+supplied about 200 W to the bypass load. The operator estimated that roughly
+250–300 W went into battery charging. No direct battery-side power reading
+was reported for this test.
+
+Clock-driven transitions within an existing schedule remain open for testing.
+
+### Power 2000 minimum AC input while charging with AC output off
+
+**Observed** on a Power 2000 with one expansion battery attached. With AC
+output off and no bypass load, a 200 W off-peak charging power request drew
+229–230 W at the AC inlet. The observed charging floor in this configuration
+was about 230 W, measured on the AC side.
+
+The operator suggests 250 W or higher as a practical override minimum for
+this configuration. The floor for a Power 2000 without an expansion battery
+remains unknown.
 
 ### Observed Power 2000 ultralow-SoC recovery cycle
 

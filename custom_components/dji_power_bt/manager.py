@@ -23,6 +23,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     CONF_ADDRESS, CONF_DEVICE_NAME, CONF_LOCAL_AUTH_KEY, CONF_MODEL, CONF_MODEL_CODE,
+    CONF_OFF_PEAK_MIN_OVERRIDE, OFF_PEAK_OVERRIDE_MODELS, OFF_PEAK_OVERRIDE_RANGE,
     CONF_SCAN_TIMEOUT, CONF_TELEMETRY_UPDATE_INTERVAL, DEFAULT_CAPTURE_DURATION_SECONDS,
     DEFAULT_CAPTURE_MAX_FRAMES, DEFAULT_SCAN_TIMEOUT, DEFAULT_TELEMETRY_UPDATE_INTERVAL,
     DOMAIN,
@@ -33,7 +34,7 @@ from .capabilities import (
 from .manager_connection import ManagerConnectionMixin
 from .manager_constants import (
     CONFIG_CACHE_MAX_AGE_SECONDS, CONNECTION_EVENT_HISTORY_LIMIT,
-    HMS_PATTERN_HISTORY_LIMIT, OUTPUT_TABLE_CACHE_MAX_AGE_SECONDS,
+    OFF_PEAK_RESEND_INTERVAL_SECONDS, HMS_PATTERN_HISTORY_LIMIT, OUTPUT_TABLE_CACHE_MAX_AGE_SECONDS,
 )
 from .manager_payload import ManagerPayloadMixin
 from .manager_transport import ManagerTransportMixin
@@ -53,7 +54,7 @@ from .protocol import (
     update_0x1018_off_peak_power, update_0x1018_peak_discharge_enabled,
     tariff_schedule_signature, validate_local_auth_key,
 )
-from .protocol_config import ENERGY_SWITCH_LENGTHS, build_energy_setting_payload, tariff_price_units
+from .protocol_config import ENERGY_SWITCH_LENGTHS, build_energy_setting_payload, effective_off_peak_minimum, tariff_price_units
 from .write_policy import (
     ACTIVE_WRITE_VERIFICATION, OFF_PEAK_POWER_WRITE_VERIFICATION, PERIODIC_TARIFF_VERIFICATION, snapshot_is_fresh,
 )
@@ -128,6 +129,16 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         self._operation_lock = asyncio.Lock()
         self._transport_unhealthy_reason: str | None = None
         self._next_seq = 0x2711
+        override = entry.options.get(CONF_OFF_PEAK_MIN_OVERRIDE)
+        self.off_peak_min_override = (
+            int(override) if self.model_code in OFF_PEAK_OVERRIDE_MODELS
+            and override in OFF_PEAK_OVERRIDE_RANGE else None
+        )
+        self._held_off_peak_w: int | None = None
+        self._off_peak_sent_at = 0.0
+        self.reported_off_peak_w: int | None = None
+        self._reported_off_peak_bounds: tuple[int, int] | None = None
+        self._off_peak_enabled_at_ack = False
         self._config_generation = 0
         self._last_config_report_monotonic: float | None = None
         self._unconfirmed_config_writes: dict[int, str] = {}
@@ -227,6 +238,42 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         return step
 
     @property
+    def effective_off_peak_min_w(self) -> int:
+        minimum = self.state.off_peak_charge_power_min_w
+        if minimum is None:
+            return 600
+        if self.off_peak_min_override is None:
+            return minimum
+        return effective_off_peak_minimum(
+            minimum, self.off_peak_min_override, self.off_peak_charging_power_step_w
+        )
+
+    @property
+    def displayed_off_peak_power_w(self) -> int | None:
+        if self._held_off_peak_w is not None:
+            return self._held_off_peak_w
+        return self.state.off_peak_charging_power_w
+
+    def _observe_off_peak_report(self, cfg: PowerConfig) -> None:
+        minimum = cfg.off_peak_charge_power_min_w
+        maximum = cfg.off_peak_charge_power_max_w
+        if minimum is None or maximum is None:
+            return
+        bounds = (minimum, maximum)
+        reported = cfg.off_peak_charging_power_w
+        midpoint, remainder = divmod(minimum + maximum, 2)
+        if (
+            self._reported_off_peak_bounds != bounds
+            or cfg.energy_optimization_mode != "scheduled"
+            or (self._off_peak_enabled_at_ack and not cfg.off_peak_charge_enabled)
+            or reported not in (self._held_off_peak_w, midpoint, midpoint + remainder)
+        ):
+            self._held_off_peak_w = None
+        self.reported_off_peak_w = reported
+        self._reported_off_peak_bounds = bounds
+        self._off_peak_enabled_at_ack = cfg.off_peak_charge_enabled is True
+
+    @property
     def charging_mode_options(self) -> list[str]:
         cfg = self.state.config
         if cfg is None:
@@ -271,14 +318,6 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             return self.state.energy_optimization_mode == "scheduled"
         return True
 
-    def _require_scheduled_energy_mode(self) -> None:
-        mode = self.state.energy_optimization_mode
-        if mode != "scheduled":
-            raise HomeAssistantError(
-                "This setting can only be changed while Energy optimization is "
-                f"set to Scheduled periods (current mode: {mode})"
-            )
-
     # ------------------------------------------------------------------
     # Public controls used by entities
     # ------------------------------------------------------------------
@@ -315,6 +354,19 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         energy_optimization_mode: str | None = None,
         peak_discharging: bool | None = None,
         off_peak_charging: bool | None = None,
+        off_peak_charging_power: int | None = None,
+    ) -> None:
+        await self._set_scheduled_fields(
+            verification_key="scheduled_energy_settings",
+            energy_optimization_mode=energy_optimization_mode,
+            peak_discharging=peak_discharging,
+            off_peak_charging=off_peak_charging,
+            off_peak_charging_power=off_peak_charging_power,
+        )
+
+    async def _set_scheduled_fields(
+        self, *, verification_key: str, energy_optimization_mode: str | None = None,
+        peak_discharging: bool | None = None, off_peak_charging: bool | None = None,
         off_peak_charging_power: int | None = None,
     ) -> None:
         """Update multiple known 0x1018 fields in one read-modify-write."""
@@ -367,6 +419,14 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
                 )
 
             new_1018 = cfg.tlv_1018_value
+            held = self._held_off_peak_w
+            # Compare against the effective setpoint even when the report contains
+            # the midpoint. This also makes an explicit request for the midpoint a change.
+            if held is not None:
+                new_1018 = update_0x1018_off_peak_power(
+                    new_1018, held, step_w=self.off_peak_charging_power_step_w,
+                    minimum_override=self.off_peak_min_override,
+                )
             changed_fields: set[str] = set()
 
             if energy_optimization_mode is not None:
@@ -398,8 +458,16 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
                     new_1018,
                     int(off_peak_charging_power),
                     step_w=self.off_peak_charging_power_step_w,
+                    minimum_override=self.off_peak_min_override,
                 )
-                if updated != new_1018:
+                resend_due = held is not None and (
+                    asyncio.get_running_loop().time() - self._off_peak_sent_at >= OFF_PEAK_RESEND_INTERVAL_SECONDS
+                )
+                first_low_request = (
+                    held is None and cfg.off_peak_charge_power_min_w is not None
+                    and off_peak_charging_power < cfg.off_peak_charge_power_min_w
+                )
+                if updated != new_1018 or resend_due or first_low_request:
                     changed_fields.add("off_peak_charging_power")
                 new_1018 = updated
 
@@ -424,7 +492,7 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             await self._send_0x63_and_apply(
                 payload,
                 expected_tlv=0x1018,
-                verification_key="scheduled_energy_settings",
+                verification_key=verification_key,
                 expected_off_peak_power=(
                     int(off_peak_charging_power)
                     if off_peak_charging_power is not None
@@ -438,34 +506,7 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             )
 
     async def async_set_off_peak_power(self, value_w: int) -> None:
-        async with self._operation_lock:
-            await self._ensure_ready()
-            cfg = await self._config_for_write(
-                required_tlv=0x1018,
-                max_age_s=CONFIG_CACHE_MAX_AGE_SECONDS,
-                refresh_source="0x60_1018_prewrite",
-            )
-            self._require_scheduled_energy_mode()
-            if cfg.tlv_1018_value is None:
-                raise HomeAssistantError("0x1018 TLV not available")
-            new_1018 = update_0x1018_off_peak_power(
-                cfg.tlv_1018_value,
-                int(value_w),
-                step_w=self.off_peak_charging_power_step_w,
-            )
-            if self._skip_unchanged_config_write(
-                0x1018, new_1018 == cfg.tlv_1018_value
-            ):
-                return
-            payload = build_0x63_payload_from_config(cfg, new_1018)
-            await self._send_0x63_and_apply(
-                payload,
-                expected_tlv=0x1018,
-                verification_key="off_peak_charging_power",
-                expected_off_peak_power=int(value_w),
-                new_1018_value=new_1018,
-                verification_policy=OFF_PEAK_POWER_WRITE_VERIFICATION,
-            )
+        await self._set_scheduled_fields(verification_key="off_peak_charging_power", off_peak_charging_power=value_w)
 
     async def async_set_charge_limit(self, value_percent: int) -> None:
         async with self._operation_lock:
@@ -516,54 +557,10 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             )
 
     async def async_set_off_peak_charge_enabled(self, enabled: bool) -> None:
-        async with self._operation_lock:
-            await self._ensure_ready()
-            cfg = await self._config_for_write(
-                required_tlv=0x1018,
-                max_age_s=CONFIG_CACHE_MAX_AGE_SECONDS,
-                refresh_source="0x60_1018_prewrite",
-            )
-            self._require_scheduled_energy_mode()
-            if cfg.tlv_1018_value is None:
-                raise HomeAssistantError("0x1018 TLV not available")
-            new_1018 = update_0x1018_off_peak_charge_enabled(cfg.tlv_1018_value, enabled)
-            if self._skip_unchanged_config_write(
-                0x1018, new_1018 == cfg.tlv_1018_value
-            ):
-                return
-            payload = build_0x63_payload_from_config(cfg, new_1018)
-            await self._send_0x63_and_apply(
-                payload,
-                expected_tlv=0x1018,
-                verification_key="off_peak_charging",
-                expected_off_peak_enabled=enabled,
-                new_1018_value=new_1018,
-            )
+        await self._set_scheduled_fields(verification_key="off_peak_charging", off_peak_charging=enabled)
 
     async def async_set_peak_discharge_enabled(self, enabled: bool) -> None:
-        async with self._operation_lock:
-            await self._ensure_ready()
-            cfg = await self._config_for_write(
-                required_tlv=0x1018,
-                max_age_s=CONFIG_CACHE_MAX_AGE_SECONDS,
-                refresh_source="0x60_1018_prewrite",
-            )
-            self._require_scheduled_energy_mode()
-            if cfg.tlv_1018_value is None:
-                raise HomeAssistantError("0x1018 TLV not available")
-            new_1018 = update_0x1018_peak_discharge_enabled(cfg.tlv_1018_value, enabled)
-            if self._skip_unchanged_config_write(
-                0x1018, new_1018 == cfg.tlv_1018_value
-            ):
-                return
-            payload = build_0x63_payload_from_config(cfg, new_1018)
-            await self._send_0x63_and_apply(
-                payload,
-                expected_tlv=0x1018,
-                verification_key="peak_discharging",
-                expected_peak_enabled=enabled,
-                new_1018_value=new_1018,
-            )
+        await self._set_scheduled_fields(verification_key="peak_discharging", peak_discharging=enabled)
 
     async def async_set_output_interface_enabled(
         self, *, interface_type: int, port_index: int, enabled: bool
@@ -643,35 +640,7 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         )
 
     async def async_set_energy_optimization_mode(self, mode: str) -> None:
-        async with self._operation_lock:
-            await self._ensure_ready()
-            cfg = await self._config_for_write(
-                required_tlv=0x1018,
-                max_age_s=CONFIG_CACHE_MAX_AGE_SECONDS,
-                refresh_source="0x60_energy_mode_prewrite",
-            )
-            if cfg.energy_optimization_mode not in {"disabled", "scheduled"}:
-                raise HomeAssistantError(
-                    "The device is using an unsupported energy optimization mode; "
-                    "change it with DJI Home before controlling it from Home Assistant"
-                )
-            if cfg.tlv_1018_value is None:
-                raise HomeAssistantError("0x1018 TLV not available")
-            new_1018 = update_0x1018_energy_optimization_mode(
-                cfg.tlv_1018_value, mode
-            )
-            if self._skip_unchanged_config_write(
-                0x1018, new_1018 == cfg.tlv_1018_value
-            ):
-                return
-            payload = build_0x63_payload_from_config(cfg, new_1018)
-            await self._send_0x63_and_apply(
-                payload,
-                expected_tlv=0x1018,
-                verification_key="energy_optimization",
-                expected_energy_mode=mode,
-                new_1018_value=new_1018,
-            )
+        await self._set_scheduled_fields(verification_key="energy_optimization", energy_optimization_mode=mode)
 
     async def async_set_charging_mode(self, mode: str) -> None:
         async with self._operation_lock:

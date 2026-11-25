@@ -135,6 +135,7 @@ class ManagerTransportMixin:
         self._last_telemetry_publish_monotonic = None
 
     def _apply_config(self, cfg: PowerConfig, *, source: str, notify: bool = True) -> None:
+        self._observe_off_peak_report(cfg)
         self.state.config = cfg
         self._unconfirmed_config_writes.clear()
         if self.is_ready:
@@ -448,6 +449,21 @@ class ManagerTransportMixin:
             if verify_period_prices and updated_tariff_slots is not None:
                 cfg.tariff_prices_unset = all(slot.price_units is None for slot in updated_tariff_slots)
             if new_1018_value is not None:
+                if expected_off_peak_power is not None:
+                    minimum = cfg.off_peak_charge_power_min_w
+                    if (
+                        self.off_peak_min_override is not None
+                        and minimum is not None
+                        and expected_off_peak_power < minimum
+                    ):
+                        self._held_off_peak_w = expected_off_peak_power
+                    else:
+                        self._held_off_peak_w = None
+                if self._held_off_peak_w is not None:
+                    self._off_peak_sent_at = asyncio.get_running_loop().time()
+                    self._off_peak_enabled_at_ack = new_1018_value[3] == 1
+                if expected_energy_mode == "disabled" or expected_off_peak_enabled is False:
+                    self._held_off_peak_w = None
                 cfg.tlv_1018_value = new_1018_value
             if new_1005_value is not None:
                 cfg.tlv_1005_value = new_1005_value
@@ -616,6 +632,17 @@ class ManagerTransportMixin:
                     pending, confirmed=True, source=source
                 )
 
+            elif (
+                self._held_off_peak_w is not None
+                and pending.expected.get("expected_off_peak_power") == self._held_off_peak_w
+                and self.reported_off_peak_w != self._held_off_peak_w
+                and self.state.config.tlv_1018_value is not None
+                and self._config_matches_expected({**pending.expected, "expected_off_peak_power": None})
+            ):
+                self._finish_write_verification(
+                    pending, confirmed=None, source=f"{source}_reported_midpoint"
+                )
+
     def _finish_write_verification(
         self, pending: PendingVerification, *, confirmed: bool | None, source: str
     ) -> None:
@@ -709,6 +736,9 @@ class ManagerTransportMixin:
                 self._notify_listeners()
 
     def _cancel_write_verifications(self) -> None:
+        self._held_off_peak_w = None
+        self.reported_off_peak_w = None
+        self._reported_off_peak_bounds = None
         for task in self._verification_tasks.values():
             if not task.done():
                 task.cancel()

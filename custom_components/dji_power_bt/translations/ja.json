@@ -105,9 +105,16 @@
         "title": "DJI Power Bluetooth オプション",
         "description": "最新の BLE テレメトリを Home Assistant のエンティティへ反映する頻度を設定します。BLE Notify 自体は元の頻度で受信・解析します。",
         "data": {
-          "telemetry_update_interval": "テレメトリ反映間隔（秒）"
+          "telemetry_update_interval": "テレメトリ反映間隔（秒）",
+          "off_peak_min_override_w": "オフピーク充電電力の設定下限を上書き（W）"
+        },
+        "data_description": {
+          "off_peak_min_override_w": "実験機能。200～600 W を 10 W 刻みで指定できます。空欄で機器の下限を使用します。"
         }
       }
+    },
+    "error": {
+      "invalid_off_peak_minimum": "200～600 W の範囲で 10 W 刻みの値を指定してください。"
     }
   },
   "selector": {
@@ -222,26 +229,26 @@
     },
     "button": {
       "set_all_day_peak_tariff": {
-        "name": "全時間帯をピーク料金に設定"
+        "name": "Set all-day peak tariff"
       },
       "set_all_day_off_peak_tariff": {
-        "name": "全時間帯をオフピーク料金に設定"
+        "name": "Set all-day off-peak tariff"
       }
     },
     "number": {
       "charging_power": {
-        "name": "充電電力"
+        "name": "Recharging power"
       }
     },
     "switch": {
       "low_battery_alarm": {
-        "name": "バッテリー残量低下アラーム"
+        "name": "Low battery alarm"
       },
       "ac_output_auto_restore": {
-        "name": "AC出力自動復旧"
+        "name": "AC output auto-restoration"
       },
       "ac_charging_cable_safety_check": {
-        "name": "AC充電ケーブル安全確認"
+        "name": "AC recharging cable safety check"
       }
     }
   }

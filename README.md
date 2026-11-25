@@ -153,6 +153,33 @@ battery charging power. During bypass, AC input includes both bypass output
 and battery charging power. If **Off-peak charging power** is set and active
 for the current scheduled period, it limits their combined AC input.
 
+### Experimental off-peak charging power minimum
+
+In the device's integration options, **Override off-peak charging power minimum (W)**
+accepts 200–600 W in 10 W increments. Clear the field to use the device minimum.
+Saving the option changes the range of the existing number entity and the
+scheduled-energy action. It sends no charging command. The option applies to
+Power 2000 and Power Auro 2000 Elite. The Auro's separate **Recharging Power**
+control keeps its own limits.
+
+In device tests, switching from the all-day peak preset to the all-day off-peak
+preset preserved the override on both models. AC input was capped at the
+selected off-peak setting: in the mid-500 W range on Power 2000 and at 200 W
+on Power Auro 2000 Elite. Bypass loads count toward this input limit.
+
+On a Power 2000 with one expansion battery, AC output off and no bypass load,
+a 200 W request drew 229–230 W of AC input while charging. For that
+configuration, the operator suggests 250 W or higher as a practical minimum.
+
+After an acknowledged below-minimum request, the number retains the requested
+watts if the station reports the midpoint of its original range. Its
+`reported_power_w` and `reported_min_w` attributes expose the station values.
+Use the AC input sensor for measured power. A different reported setpoint
+replaces the held value. A repeated request for the same target can resend
+after five minutes; the integration never periodically reapplies it. Reconnection
+and options reload discard the held request. Tariff changes do not trigger a
+reapply.
+
 ### Tariff schedule
 
 The **Set all-day off-peak tariff** and **Set all-day peak tariff** buttons call
@@ -225,7 +252,7 @@ serialized `0x1018` read-modify-write operation:
 | `energy_optimization_mode` | `disabled` or `scheduled` |
 | `peak_discharging` | `true` or `false` |
 | `off_peak_charging` | `true` or `false` |
-| `off_peak_charging_power` | device-reported watt range |
+| `off_peak_charging_power` | effective off-peak watt range |
 
 At least one field is required. Unspecified device bytes are preserved, and a
 request matching the current value sends no BLE write. This avoids separate

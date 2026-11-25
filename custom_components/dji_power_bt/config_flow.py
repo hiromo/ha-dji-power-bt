@@ -15,11 +15,15 @@ from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     BooleanSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
 )
 
+from .capabilities import infer_model_code
 from .cloud import (
     IMAGE_CAPTCHA_CODES,
     DjiAuthError,
@@ -39,6 +43,9 @@ from .const import (
     CONF_MEMBER_TOKEN,
     CONF_MODEL,
     CONF_MODEL_CODE,
+    CONF_OFF_PEAK_MIN_OVERRIDE,
+    OFF_PEAK_OVERRIDE_MODELS,
+    OFF_PEAK_OVERRIDE_RANGE,
     CONF_PASSWORD,
     CONF_SERIAL_NUMBER,
     CONF_TELEMETRY_UPDATE_INTERVAL,
@@ -580,28 +587,35 @@ class DjiPowerOptionsFlowHandler(config_entries.OptionsFlowWithReload):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        entry = self.config_entry
+        model = entry.data.get(CONF_MODEL_CODE)
+        if model is None:
+            model = infer_model_code(entry.data.get(CONF_MODEL))
+        fields = {
+            vol.Optional(
+                CONF_TELEMETRY_UPDATE_INTERVAL,
+                default=entry.options.get(
+                    CONF_TELEMETRY_UPDATE_INTERVAL,
+                    entry.data.get(CONF_TELEMETRY_UPDATE_INTERVAL, DEFAULT_TELEMETRY_UPDATE_INTERVAL),
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(
+                min=MIN_TELEMETRY_UPDATE_INTERVAL, max=MAX_TELEMETRY_UPDATE_INTERVAL
+            )),
+        }
+        if model in OFF_PEAK_OVERRIDE_MODELS:
+            fields[vol.Optional(CONF_OFF_PEAK_MIN_OVERRIDE)] = NumberSelector(
+                NumberSelectorConfig(min=200, max=600, step=10, mode=NumberSelectorMode.BOX)
+            )
+        errors = {}
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_TELEMETRY_UPDATE_INTERVAL,
-                        default=self.config_entry.options.get(
-                            CONF_TELEMETRY_UPDATE_INTERVAL,
-                            self.config_entry.data.get(
-                                CONF_TELEMETRY_UPDATE_INTERVAL,
-                                DEFAULT_TELEMETRY_UPDATE_INTERVAL,
-                            ),
-                        ),
-                    ): vol.All(
-                        vol.Coerce(int),
-                        vol.Range(
-                            min=MIN_TELEMETRY_UPDATE_INTERVAL,
-                            max=MAX_TELEMETRY_UPDATE_INTERVAL,
-                        ),
-                    ),
-                }
-            ),
-        )
+            options = dict(user_input)
+            watts = options.pop(CONF_OFF_PEAK_MIN_OVERRIDE, None)
+            if watts is not None and model in OFF_PEAK_OVERRIDE_MODELS:
+                if watts in OFF_PEAK_OVERRIDE_RANGE:
+                    options[CONF_OFF_PEAK_MIN_OVERRIDE] = int(watts)
+                else:
+                    errors[CONF_OFF_PEAK_MIN_OVERRIDE] = "invalid_off_peak_minimum"
+            if not errors:
+                return self.async_create_entry(title="", data=options)
+        schema = self.add_suggested_values_to_schema(vol.Schema(fields), user_input or entry.options)
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

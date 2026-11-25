@@ -986,12 +986,23 @@ def update_0x1005_discharge_limit(value: bytes, new_percent: int) -> bytes:
     return bytes(b)
 
 
-def update_0x1018_off_peak_power(value: bytes, new_w: int, *, step_w: int) -> bytes:
+def effective_off_peak_minimum(minimum: int, override: int | None, step: int) -> int:
+    """Extend the original power grid down to the first allowed setpoint."""
+    if override is None or override >= minimum or step <= 0:
+        return minimum
+    return minimum - ((minimum - override) // step) * step
+
+
+def update_0x1018_off_peak_power(
+    value: bytes, new_w: int, *, step_w: int, minimum_override: int | None = None
+) -> bytes:
     if len(value) < 16:
         raise ValueError("0x1018 value too short")
     b = bytearray(value)
     max_w = u32le(b, 4)
     min_w = u32le(b, 8)
+    if min_w <= max_w:
+        min_w = effective_off_peak_minimum(min_w, minimum_override, step_w)
     if not (min_w <= new_w <= max_w):
         raise ValueError(f"out of range: {new_w}W, allowed {min_w}-{max_w}W")
     if step_w <= 0:

@@ -156,6 +156,15 @@ current value and edit only the confirmed fields below:
 | `0x0C–0x0F` | confirmed off-peak charging-power setting; edit only when requested |
 | `0x10–0x55` | flags, candidate power values, reserved/unparsed data; preserve |
 
+An optional per-device lower bound extends validation for the setting at
+`0x0C`. Writers always preserve the reported bounds. Within one connection,
+a below-minimum request acknowledged by the station can be retained across a
+midpoint report. When another field changes, restore that request into the
+outgoing copy of the current record. Treat an explicit midpoint request as
+a change from the held setpoint. An exact readback verifies the power field;
+a midpoint alone leaves its reflection unconfirmed. Verify the other fields
+of a combined write independently of the midpoint interpretation.
+
 The combined `dji_power_bt.set_scheduled_energy_settings` service can update the
 four confirmed settings in one read-modify-write transaction. Unspecified
 fields retain their current bytes, and a request whose values all already match
