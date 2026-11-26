@@ -10,14 +10,6 @@ changes require an explicit migration and release-contract coverage. Entity
 unique IDs use the normalized BLE address plus entity key and are independent of
 the config-entry version.
 
-On upgrade from 1.1 to 1.2, entries using the original device-name prefix and
-default ID suffixes `charging_power`, `ac_output_auto_restore` and
-`ac_charging_cable_safety_check` acquire the suffixes `recharging_power`,
-`ac_output_auto_restoration` and `ac_recharging_cable_safety_check` respectively.
-The entity registry retains the same unique IDs. Custom entity IDs and occupied
-destinations are skipped. Update references to the old IDs in automations,
-scripts and dashboards after the upgrade.
-
 Stored runtime data includes the normalized BLE address, model/code, device name,
 local pair key, and optional serial number. Setup-only account credentials and
 member tokens are not persisted.

@@ -16,13 +16,10 @@ def _sources(*names: str) -> str:
 def test_release_version_is_0_7_34_and_public_config_entry_baseline_is_1() -> None:
     manifest = json.loads((COMPONENT / "manifest.json").read_text())
     config_flow = (COMPONENT / "config_flow.py").read_text()
-    setup = (COMPONENT / "__init__.py").read_text()
     entity = (COMPONENT / "entity.py").read_text()
 
     assert manifest["version"] == "0.7.34"
     assert "VERSION = 1" in config_flow
-    assert "MINOR_VERSION = 2" in config_flow
-    assert "from .migration import async_migrate_entry" in setup
     assert (
         'self._attr_unique_id = f"{manager.address}_{key}".replace(":", "_").lower()'
         in entity

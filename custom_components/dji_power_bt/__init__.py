@@ -37,7 +37,6 @@ from .const import (
     SERVICE_START_PROTOCOL_CAPTURE,
 )
 from .manager import DjiPowerManager
-from .migration import async_migrate_entry as async_migrate_entry
 from .protocol import (
     MAX_TARIFF_SLOTS,
     TARIFF_PRESET_OPTIONS,
