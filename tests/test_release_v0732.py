@@ -13,12 +13,12 @@ def _sources(*names: str) -> str:
     return "\n".join((COMPONENT / name).read_text() for name in names)
 
 
-def test_release_version_is_0_7_34_and_public_config_entry_baseline_is_1() -> None:
+def test_release_version_is_0_7_40_and_public_config_entry_baseline_is_1() -> None:
     manifest = json.loads((COMPONENT / "manifest.json").read_text())
     config_flow = (COMPONENT / "config_flow.py").read_text()
     entity = (COMPONENT / "entity.py").read_text()
 
-    assert manifest["version"] == "0.7.34"
+    assert manifest["version"] == "0.7.40"
     assert "VERSION = 1" in config_flow
     assert (
         'self._attr_unique_id = f"{manager.address}_{key}".replace(":", "_").lower()'

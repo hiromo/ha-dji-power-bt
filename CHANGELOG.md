@@ -9,6 +9,18 @@ notable user impact rather than every internal code change.
 
 ## Unreleased
 
+## 0.7.40 - 2026-11-26
+
+- Add DJI Power Auro 2000 Elite support, including scheduled charging,
+  tariff schedules and electricity prices.
+- Add per-port output controls for the DJI Power 1000 Mini.
+- On Power 2000 and Power Auro 2000 Elite, allow an experimental per-device
+  off-peak charging minimum of 200–600 W in 10 W steps. Using a setting
+  below the station's minimum is outside the manufacturer's warranty coverage.
+- Preserve the requested off-peak charging target when charging is disabled.
+  The number entity exposes the station's own setpoint and minimum through
+  `reported_power_w` and `reported_min_w`.
+
 ## 0.7.34 - 2026-10-16
 
 - Reduce the broad 61-byte configuration read from two requests to one on
