@@ -23,9 +23,7 @@ Current static profiles are used to decide which Home Assistant entities may be 
 
 Current profile:
 
-- USB-A x4
-- USB-C x4
-- SDC x2
+- Four USB-A ports, four USB-C ports and two SDC ports
 - SDC supported
 - 12 V accessory telemetry path retained
 - XT60 accessory telemetry path retained
@@ -55,14 +53,31 @@ reported accessory software-version error `28000023`; it does not establish
 normal behavior after upgrading the accessory, behavior with multiple expansion
 batteries, or equivalent layouts on other station models.
 
+### Power Auro 2000 Elite (`0x9E`)
+
+The static profile includes:
+
+- Two USB-A ports, three USB-C ports and two SDC ports
+- Charge and discharge limits and AC output control
+- Energy optimization mode and tariff time slots
+- Off-peak charging enable, off-peak charging power in 10 W steps, and peak discharging enable
+
+Auro also reports a separate **Recharging Power** setting with device-reported
+bounds and increment. It controls battery charging power. During bypass, an
+active **Off-peak charging power** limit caps total AC input, including the
+bypass load. See [Auro charging during bypass](#power-auro-2000-elite-charging-during-bypass).
+
+Individual USB and SDC switches are disabled by default. SDC power telemetry
+covers both ports together. See [Auro and Mini port controls](#auro-2000-elite-and-mini-port-controls)
+and [Auro configuration writes](commands.md#auro-configuration-writes) for the
+observed port records and verified tariff and price settings.
+
 ### Power 1000 Mini (`0x98`)
 
 Current profile:
 
-- USB-A x2
-- USB-C x2
+- Two USB-A ports, two USB-C ports and one SDC port
 - USB-C input telemetry
-- SDC x1
 - SDC supported and controllable
 - 12 V accessory telemetry path retained
 - XT60 accessory telemetry path retained
@@ -77,7 +92,7 @@ It does not use the Power 2000 tariff/off-peak/peak control model.
 **Observed startup variability (October 12):** the same Mini uses both
 telemetry-first/GET-before-report and report-first ordering; Power 2000 retains
 report-first ordering in the available samples. Broad and short GET bytes are
-identical across models. No fixed model-specific startup branch follows from
+identical on Power 2000 and Mini in these samples. No fixed model-specific startup branch follows from
 this evidence. See [ADR 0008](../decisions/0008-follow-observed-app-initialization.md).
 
 **Observed and important for future capability discovery**
@@ -101,6 +116,22 @@ Typical observed distinction:
 | `0x1023` | no in current captures | yes | unresolved Mini-side feature data/write-result candidate |
 
 Do not immediately replace static capability gating with raw key presence. A returned key is strong evidence that a function/table exists, but safe write semantics still require a confirmed record structure.
+
+### Power Auro 2000 Elite (`0x9E`) configuration reports
+
+**Observed:** Auro configuration responses and periodic reports provide the
+following model-specific evidence. This is a partial list of reported keys.
+
+| Key | Evidence on Auro |
+|---|---|
+| `0x100D` | The output-interface table identifies individual USB-A, USB-C and SDC ports. |
+| `0x1016` | Configuration responses and periodic reports contain 15-byte tariff rows with a per-period price field. |
+| `0x1018` | The scheduled-energy record is 103 bytes. It includes the off-peak charging power setting. |
+| `0x1026` | A separate 29-byte record carries the ordinary **Recharging Power** setting. |
+| `0x102A` | A fresh `0x62` report verified the flat-rate electricity price and currency. The tested `0x60` read omitted this key. |
+
+See [Auro energy and tariff records](packet-format.md#auro-energy-and-tariff-records)
+and [Auro configuration writes](commands.md#auro-configuration-writes) for capture and readback details.
 
 ## 0x100D output-interface table
 
