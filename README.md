@@ -175,8 +175,9 @@ After an acknowledged below-minimum request, the number retains the requested
 watts if the station reports the midpoint of its original range. Its
 `reported_power_w` and `reported_min_w` attributes expose the station values.
 Use the AC input sensor for measured power. A different reported setpoint
-replaces the held value. A repeated request for the same target can resend
-after five minutes; the integration never periodically reapplies it. Reconnection
+replaces the held value. Turning off off-peak charging preserves the target.
+While charging is enabled, a repeated request for the same target can resend
+after five minutes. Elapsed time alone never triggers a write. Reconnection
 and options reload discard the held request. Tariff changes do not trigger a
 reapply.
 

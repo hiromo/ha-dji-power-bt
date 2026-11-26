@@ -461,8 +461,7 @@ class ManagerTransportMixin:
                         self._held_off_peak_w = None
                 if self._held_off_peak_w is not None:
                     self._off_peak_sent_at = asyncio.get_running_loop().time()
-                    self._off_peak_enabled_at_ack = new_1018_value[3] == 1
-                if expected_energy_mode == "disabled" or expected_off_peak_enabled is False:
+                if expected_energy_mode == "disabled":
                     self._held_off_peak_w = None
                 cfg.tlv_1018_value = new_1018_value
             if new_1005_value is not None:

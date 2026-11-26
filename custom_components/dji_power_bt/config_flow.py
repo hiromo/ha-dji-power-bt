@@ -69,6 +69,7 @@ class DjiPowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Set up a DJI Power discovered by Home Assistant Bluetooth."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     def __init__(self) -> None:
         self._address: str | None = None

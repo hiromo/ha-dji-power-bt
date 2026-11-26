@@ -8,11 +8,11 @@ import test_ble_reliability as ble
 import test_manager_v070 as base
 
 
-def station_report(power, model=0x94, *, charging=True, mode=2, minimum=600):
+def station_report(power, model=0x94, *, charging=True, mode=2, minimum=600, maximum=1500):
     raw = bytearray(base._scheduled_1018_value(
         mode_raw=mode, off_peak_raw=1 if charging else 2, power_w=power
     ))
-    raw[4:8] = (1500).to_bytes(4, "little")
+    raw[4:8] = maximum.to_bytes(4, "little")
     raw[8:12] = minimum.to_bytes(4, "little")
     if model == 0x9E:
         raw.extend(bytes(range(17)))
@@ -69,7 +69,44 @@ def test_midpoint_display_and_shared_writer(model):
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("change", ["other", "bounds", "mode", "off", "disconnect"])
+@pytest.mark.parametrize("model,maximum,midpoint", [(0x94, 1500, 1050), (0x9E, 1440, 1020)])
+@pytest.mark.parametrize("initially_enabled", [False, True])
+def test_off_requests_preserve_target_and_skip_timed_resend(model, maximum, midpoint, initially_enabled):
+    async def run():
+        item = manager(model)
+        def report(power, charging):
+            item._apply_config(station_report(power, model, maximum=maximum, charging=charging), source="0x62")
+
+        report(600, initially_enabled)
+        await item.async_set_scheduled_energy_settings(off_peak_charging=False, off_peak_charging_power=200)
+        assert item.displayed_off_peak_power_w == 200
+        report(midpoint, False)
+        assert item.displayed_off_peak_power_w == 200
+        assert item.reported_off_peak_w == midpoint
+        item._off_peak_sent_at -= 301
+        await item.async_set_scheduled_energy_settings(off_peak_charging=False, off_peak_charging_power=200)
+        await item.async_set_off_peak_power(200)
+        assert item._request.await_count == 1
+
+        # A changed target still takes effect immediately while charging is off.
+        await item.async_set_off_peak_power(250)
+        report(midpoint, False)
+        assert item.displayed_off_peak_power_w == 250
+        expected = bytearray(item.state.config.tlv_1018_value)
+        expected[12:16] = (250).to_bytes(4, "little")
+        assert ble.tlv(0x1018, expected) in item._request.await_args.kwargs["payload"]
+        await item.async_set_scheduled_energy_settings(off_peak_charging=True)
+        expected[3] = 1
+        assert ble.tlv(0x1018, expected) in item._request.await_args.kwargs["payload"]
+        assert item._request.await_count == 3
+        report(midpoint, True)
+        report(midpoint, False)
+        assert item.displayed_off_peak_power_w == 250
+        item._cancel_write_verifications()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("change", ["other", "bounds", "mode", "disconnect"])
 def test_hold_invalidation(change):
     async def run():
         item = manager()
@@ -81,7 +118,7 @@ def test_hold_invalidation(change):
             cfg = station_report(1050)
         else:
             cfg = station_report(
-                600 if change == "other" else 1050, charging=change != "off",
+                600 if change == "other" else 1050,
                 minimum=500 if change == "bounds" else 600, mode=1 if change == "mode" else 2,
             )
         item._apply_config(cfg, source="0x62")

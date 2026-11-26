@@ -10,6 +10,14 @@ changes require an explicit migration and release-contract coverage. Entity
 unique IDs use the normalized BLE address plus entity key and are independent of
 the config-entry version.
 
+On upgrade from 1.1 to 1.2, entries using the original device-name prefix and
+default ID suffixes `charging_power`, `ac_output_auto_restore` and
+`ac_charging_cable_safety_check` acquire the suffixes `recharging_power`,
+`ac_output_auto_restoration` and `ac_recharging_cable_safety_check` respectively.
+The entity registry retains the same unique IDs. Custom entity IDs and occupied
+destinations are skipped. Update references to the old IDs in automations,
+scripts and dashboards after the upgrade.
+
 Stored runtime data includes the normalized BLE address, model/code, device name,
 local pair key, and optional serial number. Setup-only account credentials and
 member tokens are not persisted.
@@ -371,8 +379,11 @@ and `reported_min_w` expose the underlying report. Write history records
 requests, acknowledgements and verification separately from telemetry.
 
 Only an acknowledged low request can mask a subsequent midpoint. A different
-report, changed bounds, leaving scheduled mode, turning charging off, or losing
-the session invalidates that interpretation. A fresh explicit same-target
-request can resend after 300 seconds. Normal pre-write snapshot refresh and
+setpoint (other than the target or midpoint), changed bounds, leaving scheduled
+mode, or losing the session invalidates that interpretation. Disabling off-peak
+charging preserves the held setpoint. While disabled, a repeated same-target
+request does not trigger a resend due to elapsed time. Re-enabling charging
+writes the newly requested or held target in the same record. While enabled,
+a fresh explicit same-target request can resend after 300 seconds. Normal pre-write snapshot refresh and
 verification still apply. No timer, tariff transition, or restart sends a
 charging command on behalf of an earlier request.

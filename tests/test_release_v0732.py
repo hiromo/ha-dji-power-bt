@@ -21,7 +21,8 @@ def test_release_version_is_0_7_34_and_public_config_entry_baseline_is_1() -> No
 
     assert manifest["version"] == "0.7.34"
     assert "VERSION = 1" in config_flow
-    assert "async_migrate_entry" not in setup
+    assert "MINOR_VERSION = 2" in config_flow
+    assert "from .migration import async_migrate_entry" in setup
     assert (
         'self._attr_unique_id = f"{manager.address}_{key}".replace(":", "_").lower()'
         in entity

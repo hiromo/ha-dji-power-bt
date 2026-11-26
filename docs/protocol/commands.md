@@ -163,7 +163,8 @@ midpoint report. When another field changes, restore that request into the
 outgoing copy of the current record. Treat an explicit midpoint request as
 a change from the held setpoint. An exact readback verifies the power field;
 a midpoint alone leaves its reflection unconfirmed. Verify the other fields
-of a combined write independently of the midpoint interpretation.
+of a combined write independently of the midpoint interpretation. Changing the
+off-peak charging enable flag alone preserves the acknowledged setpoint.
 
 The combined `dji_power_bt.set_scheduled_energy_settings` service can update the
 four confirmed settings in one read-modify-write transaction. Unspecified

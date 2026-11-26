@@ -138,7 +138,6 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         self._off_peak_sent_at = 0.0
         self.reported_off_peak_w: int | None = None
         self._reported_off_peak_bounds: tuple[int, int] | None = None
-        self._off_peak_enabled_at_ack = False
         self._config_generation = 0
         self._last_config_report_monotonic: float | None = None
         self._unconfirmed_config_writes: dict[int, str] = {}
@@ -265,13 +264,11 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         if (
             self._reported_off_peak_bounds != bounds
             or cfg.energy_optimization_mode != "scheduled"
-            or (self._off_peak_enabled_at_ack and not cfg.off_peak_charge_enabled)
             or reported not in (self._held_off_peak_w, midpoint, midpoint + remainder)
         ):
             self._held_off_peak_w = None
         self.reported_off_peak_w = reported
         self._reported_off_peak_bounds = bounds
-        self._off_peak_enabled_at_ack = cfg.off_peak_charge_enabled is True
 
     @property
     def charging_mode_options(self) -> list[str]:
@@ -460,8 +457,11 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
                     step_w=self.off_peak_charging_power_step_w,
                     minimum_override=self.off_peak_min_override,
                 )
-                resend_due = held is not None and (
-                    asyncio.get_running_loop().time() - self._off_peak_sent_at >= OFF_PEAK_RESEND_INTERVAL_SECONDS
+                resend_due = (
+                    held is not None
+                    and new_1018[3] == 1  # Off-peak charging enabled in the outgoing record.
+                    and asyncio.get_running_loop().time() - self._off_peak_sent_at
+                    >= OFF_PEAK_RESEND_INTERVAL_SECONDS
                 )
                 first_low_request = (
                     held is None and cfg.off_peak_charge_power_min_w is not None
