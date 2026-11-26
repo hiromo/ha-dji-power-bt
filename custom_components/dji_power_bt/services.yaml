@@ -121,7 +121,7 @@ set_tariff_schedule:
                   mode: box
                   min: 0
                   max: 429496.7295
-                  step: 0.0001
+                  step: any
     flat_rate_electricity_price:
       required: false
       selector:
@@ -129,7 +129,7 @@ set_tariff_schedule:
           mode: box
           min: 0
           max: 429496.7295
-          step: 0.0001
+          step: any
     currency:
       required: false
       selector:
