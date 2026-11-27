@@ -199,3 +199,54 @@ def test_rejected_replacement_preserves_prior_acknowledged_request():
         assert item.reported_off_peak_w == 1050
         item._cancel_write_verifications()
     asyncio.run(run())
+
+@pytest.mark.parametrize("model", [0x94, 0x9E])
+def test_partial_report_display_grace(model):
+    async def run():
+        item = manager(model)
+        previous = item.state.config
+        partial = ble.protocol.parse_power_config(b"", source_cmd_id=0x62)
+        item._apply_config(partial, source="0x62")
+        assert item.state.config is partial
+        if model == 0x94:
+            assert item.displayed_energy_mode == "unknown"
+            assert item._energy_display_timer is None
+            return
+        assert item.displayed_energy_config is previous
+        assert item.energy_optimization_control_available
+        assert item.displayed_off_peak_power_w == 600
+        timer = item._energy_display_timer
+        assert 24 < timer.when() - asyncio.get_running_loop().time() <= 25
+        item._apply_config(partial, source="0x62")
+        assert item._energy_display_timer is timer
+        updates = []
+        item.async_add_listener(lambda: updates.append(item.displayed_energy_mode))
+        item._expire_energy_display_grace()
+        assert timer.cancelled()
+        assert updates == ["unknown"]
+        assert not item.energy_optimization_control_available
+        item._apply_config(partial, source="0x62")
+        assert item._energy_display_timer is None
+        item._apply_config(previous, source="0x62")
+        assert item.displayed_energy_mode == "scheduled"
+        item._request.assert_not_awaited()
+    asyncio.run(run())
+
+
+def test_auro_display_grace_replacement_and_disconnect():
+    async def run():
+        item = manager(0x9E)
+        partial = ble.protocol.parse_power_config(b"", source_cmd_id=0x62)
+        item._apply_config(partial, source="0x62")
+        timer = item._energy_display_timer
+        item._apply_config(station_report(600, 0x9E, mode=1), source="0x62")
+        assert timer.cancelled()
+        assert item.displayed_energy_mode == "disabled"
+        item._apply_config(partial, source="0x62")
+        timer = item._energy_display_timer
+        await item.async_disconnect(reason="test")
+        assert timer.cancelled()
+        assert not item.energy_optimization_control_available
+        item._apply_config(partial, source="0x60_initial")
+        assert item.displayed_energy_mode == "unknown"
+    asyncio.run(run())

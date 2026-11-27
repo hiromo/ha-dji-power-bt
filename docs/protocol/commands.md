@@ -61,6 +61,25 @@ Mini can issue GETs before the first configuration report. Report intervals can 
 
 `0x62` is parsed using the same configuration parser as `0x60`. It is the preferred passive source for confirming recent writes.
 
+**Observed** on Power Auro 2000 Elite, 2026-11-27. A manual off-peak
+charging OFF write received a successful `0x63` ACK at 15:13:58 JST.
+The preceding 683-byte `0x62` contained the 103-byte `0x1018` record.
+At 15:14:00, a 499-byte `0x62` retained `0x1017` but omitted `0x1018`.
+At 15:14:02 the next 683-byte report again contained `0x1018`, with
+scheduled mode, peak discharging enabled and off-peak charging disabled.
+The manager acknowledged both reports. The shorter report supplies no
+mode value or evidence for verifying a write to `0x1018`.
+
+**Observed** in a second capture that day, with both reported and requested
+power at 600 W. After the 15:21:18 JST OFF write, the next report at
+15:21:22 included `0x1018` and confirmed OFF. After the 15:21:31 ON write,
+report 6795 at 15:21:32 was 499 bytes and contained `0x1017` but omitted
+`0x1018`. The four scheduled-energy controls became unavailable and the
+tariff period became unknown at that second. Report 6796 at 15:21:35 was
+683 bytes and confirmed scheduled mode, charging enabled and 600 W. Both
+reports were acknowledged. The omission can occur in either switch direction,
+including when the requested power equals the device-reported minimum.
+
 **Observed (Power 2000 with one expansion battery, 2026-09-26):** the latest
 0x62 contains a `0x1001` table with one `0x100F` record absent from the latest
 0x60 reply in that diagnostic. Accessory battery fields are **Inferred** from

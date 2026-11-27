@@ -482,7 +482,7 @@ class DjiPowerTariffPeriodSensor(DjiPowerEntity, SensorEntity):
         return evaluate_tariff_period(cfg.tariff_slots, device_now)
 
     def _calculate_period(self) -> TariffPeriodStatus:
-        cfg = self.manager.state.config
+        cfg = self.manager.displayed_energy_config
         if cfg is None:
             return evaluate_tariff_period(None, datetime.now(timezone.utc))
         if cfg.energy_optimization_mode == "disabled":
@@ -531,13 +531,9 @@ class DjiPowerTariffPeriodSensor(DjiPowerEntity, SensorEntity):
             "slots": [slot.as_dict() for slot in slots] if slots is not None else None,
             "conflict": self._period.conflict,
             "source": "0x1017",
-            "energy_optimization_mode": (
-                cfg.energy_optimization_mode if cfg else "unknown"
-            ),
+            "energy_optimization_mode": self.manager.displayed_energy_mode,
             "scheduled_period": scheduled_period.state,
-            "schedule_active": bool(
-                cfg and cfg.energy_optimization_mode == "scheduled"
-            ),
+            "schedule_active": self.manager.displayed_energy_mode == "scheduled",
             "timezone_offset_min": cfg.timezone_offset_min if cfg else None,
             "timezone_source": "device_0x1015" if cfg and cfg.timezone_offset_min is not None else "unavailable",
         }

@@ -336,6 +336,18 @@ Entity creation uses conservative model capability profiles. Runtime availabilit
 
 Do not create a control just because a field can be parsed on one capture. Write safety, model support, and current runtime mode are separate questions.
 
+## Auro scheduled-energy display
+
+In a ready Auro session, the first `0x62` omitting `0x1018` starts a
+25-second display grace period if the preceding configuration contained the
+record. Entities retain the previous mode, switches and power setting while
+tariff slots and device time zone follow the incoming report. Repeated
+omissions do not restart the timer. A new decoded record takes effect
+immediately. At expiry the entities publish their normal missing-record
+states, even if no other notification arrives. Disconnect clears the grace
+period. Writes and write verification continue to use the actual configuration
+report. The display timer performs no Bluetooth operation.
+
 ## Auro and Mini controls
 
 Auro's enabled-by-default **Recharging power** number (`charging_power`) accepts watts through

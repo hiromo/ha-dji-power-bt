@@ -936,6 +936,7 @@ class ManagerConnectionMixin:
         return disconnect_result
 
     def _reset_protocol_state(self) -> None:
+        self._clear_energy_display_grace()
         self._reassembler = DumlReassembler()
         self._transport_unhealthy_reason = None
         # Never reuse a pre-disconnect configuration snapshot on a new BLE link,

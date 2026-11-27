@@ -138,6 +138,8 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         self._off_peak_sent_at = 0.0
         self.reported_off_peak_w: int | None = None
         self._reported_off_peak_bounds: tuple[int, int] | None = None
+        self._energy_display_fallback: PowerConfig | None = None
+        self._energy_display_timer: asyncio.TimerHandle | None = None
         self._config_generation = 0
         self._last_config_report_monotonic: float | None = None
         self._unconfirmed_config_writes: dict[int, str] = {}
@@ -237,8 +239,19 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
         return step
 
     @property
+    def displayed_energy_config(self) -> PowerConfig | None:
+        """Source of 0x1018 entity values only. Writes use state.config."""
+        return self._energy_display_fallback or self.state.config
+
+    @property
+    def displayed_energy_mode(self) -> str:
+        cfg = self.displayed_energy_config
+        return cfg.energy_optimization_mode if cfg else "unknown"
+
+    @property
     def effective_off_peak_min_w(self) -> int:
-        minimum = self.state.off_peak_charge_power_min_w
+        cfg = self.displayed_energy_config
+        minimum = cfg.off_peak_charge_power_min_w if cfg else None
         if minimum is None:
             return 600
         if self.off_peak_min_override is None:
@@ -251,7 +264,8 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
     def displayed_off_peak_power_w(self) -> int | None:
         if self._held_off_peak_w is not None:
             return self._held_off_peak_w
-        return self.state.off_peak_charging_power_w
+        cfg = self.displayed_energy_config
+        return cfg.off_peak_charging_power_w if cfg else None
 
     def _observe_off_peak_report(self, cfg: PowerConfig) -> None:
         minimum = cfg.off_peak_charge_power_min_w
@@ -281,7 +295,7 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
 
     @property
     def energy_optimization_control_available(self) -> bool:
-        cfg = self.state.config
+        cfg = self.displayed_energy_config
         return bool(
             self.is_ready
             and self.capabilities.has_energy_optimization
@@ -312,7 +326,7 @@ class DjiPowerManager(ManagerConnectionMixin, ManagerPayloadMixin, ManagerTransp
             RuntimeFeature.TARIFF_TIME_SLOTS,
         }
         if feature in scheduled_features:
-            return self.state.energy_optimization_mode == "scheduled"
+            return self.displayed_energy_mode == "scheduled"
         return True
 
     # ------------------------------------------------------------------

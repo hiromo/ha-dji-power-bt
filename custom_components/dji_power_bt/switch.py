@@ -52,7 +52,7 @@ SWITCHES: tuple[SwitchDescription, ...] = (
     SwitchDescription(
         key="off_peak_charging",
         name="Off-peak charging",
-        is_on_fn=lambda m: m.state.off_peak_charge_enabled,
+        is_on_fn=lambda m: m.displayed_energy_config.off_peak_charge_enabled if m.displayed_energy_config else None,
         set_fn=_set_off_peak,
         icon="mdi:battery-arrow-up",
         supported_fn=lambda m: m.capabilities.has_off_peak_charging,
@@ -63,7 +63,7 @@ SWITCHES: tuple[SwitchDescription, ...] = (
     SwitchDescription(
         key="peak_discharging",
         name="Peak discharging",
-        is_on_fn=lambda m: m.state.peak_discharge_enabled,
+        is_on_fn=lambda m: m.displayed_energy_config.peak_discharge_enabled if m.displayed_energy_config else None,
         set_fn=_set_peak,
         icon="mdi:battery-arrow-down",
         supported_fn=lambda m: m.capabilities.has_peak_discharging,

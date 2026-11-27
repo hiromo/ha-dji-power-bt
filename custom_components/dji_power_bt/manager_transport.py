@@ -13,14 +13,14 @@ from homeassistant.helpers import device_registry as dr
 
 from .const import CHAR_WRITE_C304, DOMAIN
 from .manager_constants import (
-    GATT_WRITE_TIMEOUT, WRITE_LOCK_TIMEOUT,
+    AURO_ENERGY_DISPLAY_GRACE_SECONDS, GATT_WRITE_TIMEOUT, WRITE_LOCK_TIMEOUT,
 )
 from .manager_types import DjiPowerAuthError, DjiPowerConnectionError, PendingVerification
 from .manager_utils import utcnow_iso
 from .protocol import (
     DEFAULT_STATUS_REQUEST_PAYLOAD, DumlFrame, PowerConfig, TariffSlot,
     build_duml_frame,
-    parse_0x63_write_result, parse_power_config, parse_realtime_metrics,
+    find_first_tlv, parse_0x63_write_result, parse_power_config, parse_realtime_metrics,
     tariff_schedule_signature, write_result_ok,
 )
 from .write_policy import ACTIVE_WRITE_VERIFICATION, WriteVerificationPolicy, snapshot_is_fresh
@@ -134,7 +134,39 @@ class ManagerTransportMixin:
         self._telemetry_publish_pending = False
         self._last_telemetry_publish_monotonic = None
 
+    def _clear_energy_display_grace(self) -> None:
+        if self._energy_display_timer is not None:
+            self._energy_display_timer.cancel()
+            self._energy_display_timer = None
+        self._energy_display_fallback = None
+
+    def _expire_energy_display_grace(self) -> None:
+        self._clear_energy_display_grace()
+        if self.is_ready:
+            self._notify_listeners()
+
+    def _update_energy_display_grace(self, cfg: PowerConfig, source: str) -> None:
+        if self.model_code != 0x9E:
+            return
+        if cfg.tlv_1018_value is not None or find_first_tlv(cfg.source_payload, 0x1018) is not None:
+            self._clear_energy_display_grace()
+            return
+        previous = self.state.config
+        if (
+            source == "0x62"
+            and self.is_ready
+            and self._energy_display_timer is None
+            and self._last_config_report_monotonic is not None
+            and previous is not None
+            and previous.tlv_1018_value is not None
+        ):
+            self._energy_display_fallback = previous
+            self._energy_display_timer = asyncio.get_running_loop().call_later(
+                AURO_ENERGY_DISPLAY_GRACE_SECONDS, self._expire_energy_display_grace
+            )
+
     def _apply_config(self, cfg: PowerConfig, *, source: str, notify: bool = True) -> None:
+        self._update_energy_display_grace(cfg, source)
         self._observe_off_peak_report(cfg)
         self.state.config = cfg
         self._unconfirmed_config_writes.clear()

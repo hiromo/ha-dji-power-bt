@@ -39,8 +39,8 @@ SELECTS: tuple[SelectDescription, ...] = (
         name="Energy optimization mode",
         options_fn=lambda _m: ["disabled", "scheduled"],
         current_fn=lambda m: (
-            m.state.energy_optimization_mode
-            if m.state.energy_optimization_mode in {"disabled", "scheduled"}
+            m.displayed_energy_mode
+            if m.displayed_energy_mode in {"disabled", "scheduled"}
             else None
         ),
         select_fn=_set_energy_optimization,
@@ -110,7 +110,7 @@ class DjiPowerSelect(DjiPowerEntity, SelectEntity):
             "reflection_confirmed": self.manager.state.reflection_confirmed,
             "reflection_source": self.manager.state.reflection_source,
         }
-        cfg = self.manager.state.config
+        cfg = self.manager.displayed_energy_config if self.description.key == "energy_optimization_mode" else self.manager.state.config
         if self.description.key == "energy_optimization_mode" and cfg is not None:
             attrs.update(
                 {
