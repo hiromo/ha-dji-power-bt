@@ -130,6 +130,23 @@ def test_hold_invalidation(change):
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("model", [0x94, 0x9E])
+@pytest.mark.parametrize("watts", [0, 100])
+def test_experimental_minimum_setpoint(model, watts):
+    async def run():
+        item = manager(model, override=watts)
+        assert item.effective_off_peak_min_w == watts
+        expected = bytearray(item.state.config.tlv_1018_value)
+        expected[12:16] = watts.to_bytes(4, "little")
+        await item.async_set_off_peak_power(watts)
+        assert ble.tlv(0x1018, expected) in item._request.await_args.kwargs["payload"]
+        item._apply_config(station_report(1050, model), source="0x62")
+        assert item.displayed_off_peak_power_w == watts
+        assert item.reported_off_peak_w == 1050
+        item._cancel_write_verifications()
+    asyncio.run(run())
+
+
 def test_low_write_failure_and_freshness():
     async def run():
         item = manager()
@@ -152,7 +169,7 @@ def test_low_write_failure_and_freshness():
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("model,override", [(0x94, None), (0x9E, 190), (0x98, 200)])
+@pytest.mark.parametrize("model,override", [(0x94, None), (0x9E, -10), (0x98, 200)])
 def test_override_is_optional_and_model_scoped(model, override):
     async def run():
         item = manager(model, override)

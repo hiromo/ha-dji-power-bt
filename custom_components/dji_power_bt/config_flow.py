@@ -604,7 +604,12 @@ class DjiPowerOptionsFlowHandler(config_entries.OptionsFlowWithReload):
         }
         if model in OFF_PEAK_OVERRIDE_MODELS:
             fields[vol.Optional(CONF_OFF_PEAK_MIN_OVERRIDE)] = NumberSelector(
-                NumberSelectorConfig(min=200, max=600, step=10, mode=NumberSelectorMode.BOX)
+                NumberSelectorConfig(
+                    min=OFF_PEAK_OVERRIDE_RANGE.start,
+                    max=OFF_PEAK_OVERRIDE_RANGE[-1],
+                    step=OFF_PEAK_OVERRIDE_RANGE.step,
+                    mode=NumberSelectorMode.BOX,
+                )
             )
         errors = {}
         if user_input is not None:

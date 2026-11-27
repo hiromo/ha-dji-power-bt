@@ -159,7 +159,7 @@ for the current scheduled period, it limits their combined AC input.
 the manufacturer's warranty coverage. Use this override at your own risk.**
 
 In the device's integration options, **Override off-peak charging power minimum (W)**
-accepts 200–600 W in 10 W increments. Clear the field to use the device minimum.
+accepts 0–600 W in 10 W increments. Clear the field to use the device minimum.
 Saving the option changes the range of the existing number entity and the
 scheduled-energy action. It sends no charging command. The option applies to
 Power 2000 and Power Auro 2000 Elite. The Auro's separate **Recharging Power**
@@ -301,8 +301,8 @@ turning off Bluetooth on your phone temporarily.
 ### Unstable connection or delayed reconnect
 
 After consecutive BLE connection failures, the integration waits 10, 20, 30,
-then 60 seconds before retrying. It continues to wait 60 seconds after each
-failure. A successful connection resets the delay.
+and 60 seconds before successive retries. Further failures keep the delay at
+60 seconds. A successful connection resets the delay.
 
 ## Diagnostics and protocol capture
 

@@ -86,7 +86,7 @@ _SERVICE_SCHEDULED_ENERGY_SCHEMA = vol.All(
             vol.Optional(ATTR_PEAK_DISCHARGING): cv.boolean,
             vol.Optional(ATTR_OFF_PEAK_CHARGING): cv.boolean,
             vol.Optional(ATTR_OFF_PEAK_CHARGING_POWER): vol.All(
-                vol.Coerce(int), vol.Range(min=1, max=10000)
+                vol.Coerce(int), vol.Range(min=0, max=10000)
             ),
         }
     ),

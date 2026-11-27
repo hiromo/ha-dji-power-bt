@@ -109,12 +109,12 @@
           "off_peak_min_override_w": "Override off-peak charging power minimum (W)"
         },
         "data_description": {
-          "off_peak_min_override_w": "Experimental. Choose 200–600 W in 10 W increments. Leave blank to use the station minimum."
+          "off_peak_min_override_w": "Experimental. Choose 0–600 W in 10 W increments. Leave blank to use the station minimum."
         }
       }
     },
     "error": {
-      "invalid_off_peak_minimum": "Enter a value from 200 to 600 W in 10 W increments."
+      "invalid_off_peak_minimum": "Enter a value from 0 to 600 W in 10 W increments."
     }
   },
   "selector": {

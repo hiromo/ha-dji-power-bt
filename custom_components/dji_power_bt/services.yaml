@@ -51,7 +51,7 @@ set_scheduled_energy_settings:
       required: false
       selector:
         number:
-          min: 1
+          min: 0
           max: 10000
           step: 1
           mode: box

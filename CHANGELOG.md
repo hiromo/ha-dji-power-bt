@@ -9,6 +9,10 @@ notable user impact rather than every internal code change.
 
 ## Unreleased
 
+- Lower the experimental off-peak charging minimum override to 0 W on Power
+  2000 and Power Auro 2000 Elite. See the [Auro field observations](docs/protocol/model-differences.md#off-peak-charging-power-below-200-w)
+  for behavior with and without a bypass load.
+
 ## 0.7.40 - 2026-11-26
 
 - Add DJI Power Auro 2000 Elite support, including scheduled charging,

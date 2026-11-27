@@ -348,6 +348,21 @@ bypass, total AC input is the sum of bypass output and battery charging power.
 When **Off-peak charging power** is set and active for the current scheduled
 period, it caps that sum. Bypass output therefore counts toward the limit.
 
+### Off-peak charging power below 200 W
+
+**Observed** in an operator-reported Power Auro 2000 Elite test on 2026-11-28:
+
+| Downstream AC load | Off-peak charging power setting | Observed power flow |
+| --- | ---: | --- |
+| No load | 190 W | The operator heard a relay click and AC inlet power dropped to 0 W. |
+| Bypass load present | 0 W | AC inlet power dropped to 0 W while the battery supplied the entire load. |
+| Bypass load present | 10 W | The AC inlet supplied 10 W and the battery supplied the rest of the load. |
+
+**Hypothesis:** With no bypass load, Auro may require an off-peak setting of
+at least 200 W to charge from AC. The exact cutoff remains unverified.
+With a bypass load, the 0 W setting has a demonstrated use: the battery can
+take over the entire load while AC output continues.
+
 ## Auro 2000 Elite and Mini port controls
 
 **Observed** in the November 24 DJI Home captures and app tests: Auro has two

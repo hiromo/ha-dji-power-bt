@@ -375,7 +375,7 @@ fractional decimal places. Power 2000 rejects these Auro-only fields. Both all-d
 
 ### Experimental off-peak minimum override
 
-The optional `off_peak_min_override_w` entry option accepts 200–600 W in 10 W
+The optional `off_peak_min_override_w` entry option accepts 0–600 W in 10 W
 steps on Power 2000 and Auro. An absent option uses the reported range.
 The number's standard `min` and the scheduled-energy service use the same
 effective lower bound on the device's original step grid. `reported_power_w`
