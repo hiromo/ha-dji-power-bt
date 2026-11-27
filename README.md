@@ -292,16 +292,17 @@ does not hold Bluetooth, keep the station near the adapter/proxy, wait 3-5
 minutes for another advertisement, and retry. DJI Home Wi-Fi/cloud use may
 continue.
 
+### Home Assistant cannot reconnect after using DJI Home on Android
+
+DJI Home may stay connected to the Power Auro 2000 Elite over Bluetooth
+after you switch to another app. If Home Assistant cannot reconnect, try
+turning off Bluetooth on your phone temporarily.
+
 ### Unstable connection or delayed reconnect
 
-After an unexpected disconnect, the integration waits five seconds, discards
-the old BLE device object, and requires a fresh connectable advertisement.
-Recoverable failures then wait **10, 20, 30, and 60 seconds**, continuing at
-60 seconds without an attempt limit while BLE is enabled and the integration
-is running. Successful authenticated initialization resets that backoff.
-These delays follow failed attempts and cleanup; they are not fixed intervals
-between connection attempts. Check RF coverage, DJI Home
-Bluetooth use, and free adapter/proxy slots before assuming retries have stopped.
+After consecutive BLE connection failures, the integration waits 10, 20, 30,
+then 60 seconds before retrying. It continues to wait 60 seconds after each
+failure. A successful connection resets the delay.
 
 ## Diagnostics and protocol capture
 

@@ -80,6 +80,23 @@ tariff period became unknown at that second. Report 6796 at 15:21:35 was
 reports were acknowledged. The omission can occur in either switch direction,
 including when the requested power equals the device-reported minimum.
 
+**Observed** in an Android DJI Home session with Auro on 2026-11-28 JST.
+At a constant 600 W, three ON writes were each followed by a 499-byte
+`0x62` omitting `0x1018`. The app acknowledged each report using its
+sequence. A 683-byte report with charging enabled followed 1.022, 2.000
+and 2.975 seconds later, respectively. Each short report arrived about
+10 seconds after the preceding report. All six toggles (three ON, three
+OFF) received a matching `0x63` reply and a 683-byte `0x62` reflecting
+the requested state about four seconds after the write. The three OFF
+writes had no intervening 499-byte report in this session. The cause
+of the two report timings remains **Inferred**.
+
+The app's initial reads included two identical broad `0x60` requests
+before the first reply, then two reads each of `00 01 10` and `00 04 10`.
+The broad selector payload matched HA's 61-byte request. After each
+toggle the app also read the broad selector and both short selectors
+once immediately after the write acknowledgement.
+
 **Observed (Power 2000 with one expansion battery, 2026-09-26):** the latest
 0x62 contains a `0x1001` table with one `0x100F` record absent from the latest
 0x60 reply in that diagnostic. Accessory battery fields are **Inferred** from
